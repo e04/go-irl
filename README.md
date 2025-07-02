@@ -90,12 +90,12 @@ Follow these steps to download the tools, run the stack, and configure OBS.
       ```
 
     - **Windows**:
-      Simply double-click the `go-irl-windows.bat` file, or run it from Command Prompt:
+      Simply double-click the `go-irl-windows.bat` file,
+
+      or run it from Command Prompt:
       ```cmd
       go-irl-windows.bat
       ```
-
-    Leave this terminal window running. It manages all the components.
 
 ---
 
