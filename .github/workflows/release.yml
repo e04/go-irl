@@ -1,11 +1,9 @@
 name: Build & Publish Release Assets
 
 on:
-  # Trigger when a version tag (e.g. v1.2.3) is pushed
   push:
     tags:
       - 'v*'
-  # Allow manual execution
   workflow_dispatch:
 
 permissions:
@@ -32,7 +30,7 @@ jobs:
 
           # Ensure required utilities are present
           sudo apt-get update -qq
-          sudo apt-get install -y -qq unzip
+          sudo apt-get install -y -qq unzip zip
 
           for ARCH in "${ARCHS[@]}"; do
             DIST_DIR="go-irl-${ARCH}"
@@ -57,11 +55,7 @@ jobs:
             done
 
             # Package the distribution directory
-            if [[ "${ARCH}" == windows-* ]]; then
-              zip -qr "${DIST_DIR}.zip" "${DIST_DIR}"
-            else
-              tar -czf "${DIST_DIR}.tar.gz" "${DIST_DIR}"
-            fi
+            zip -qr "${DIST_DIR}.zip" "${DIST_DIR}"
           done
 
       - name: Publish release
@@ -76,6 +70,5 @@ jobs:
           prerelease: false
           files: |
             go-irl-*.zip
-            go-irl-*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
