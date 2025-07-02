@@ -39,7 +39,7 @@ The `go-irl` stack is built upon three key components that work in tandem:
 
 The data flows through the components to create a resilient and automated workflow. The launcher script manages all three components automatically.
 
-<img width="1671" alt="3app" src="https://github.com/user-attachments/assets/39afdd63-dfc6-4bcb-b066-f8510dfc055d" />
+<img width="1671" src="https://github.com/user-attachments/assets/39afdd63-dfc6-4bcb-b066-f8510dfc055d" />
 
 ## Getting Started
 
@@ -106,6 +106,9 @@ Now, configure OBS to receive the stream and use the bridge for stats and scene 
 1.  **Create Scenes:**
 
     - Create two scenes in OBS. For this guide, we'll name them **`ONLINE`** and **`OFFLINE`**. The `OFFLINE` scene can contain a "Be Right Back" message, an image, or a video loop.
+  
+
+<img width="500" src="https://github.com/user-attachments/assets/d90b5a8f-1f70-4b68-a5c8-df5397d29bf9" />
 
 2.  **Add the Media Source (Video Feed):**
 
@@ -117,6 +120,8 @@ Now, configure OBS to receive the stream and use the bridge for stats and scene 
     - In the "Input Format" field, enter `mpegts`.
     - **IMPORTANT:** **Uncheck** the box for `Restart playback when source becomes active`. This prevents the video from stuttering every time `obs-srt-bridge` switches back to this scene.
     - Click OK.
+  
+<img width="800" src="https://github.com/user-attachments/assets/cecc8460-1fa0-420f-8310-9307849e9703" />
 
 3.  **Add the Browser Source (Stats and Scene Switching):**
 
@@ -137,13 +142,15 @@ Now, configure OBS to receive the stream and use the bridge for stats and scene 
     - **IMPORTANT:** For automatic scene switching to work, scroll down in the properties window and set **Page permissions** to **Advanced access to OBS**.
     - Click OK.
 
+<img width="800" src="https://github.com/user-attachments/assets/6bb9e601-a2e1-453c-98e0-ea6488f838e4" />
+
 ---
 
 ### Part 3: Configure Your Mobile App
 
 Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX).
 
-1.  Set the destination URL to point to your PC's **public IP address** and the port you configured for `go-srtla`.
+1.  Set the destination URL to point to your PC's **public IP address** and the port you configured.
 
     ```
     srtla://<YOUR_PUBLIC_IP_ADDRESS>:5000
