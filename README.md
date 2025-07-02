@@ -1,16 +1,7 @@
 # go-irl: A modern SRTLA Streaming Stack
 
-```
-      ██████╗   ██████╗         ██╗ ██████╗  ██╗     
-     ██╔════╝  ██╔═══██╗        ██║ ██╔══██╗ ██║     
-     ██║  ███╗ ██║   ██║ █████╗ ██║ ██████╔╝ ██║     
-     ██║   ██║ ██║   ██║ ╚════╝ ██║ ██╔══██╗ ██║     
-     ╚██████╔╝ ╚██████╔╝        ██║ ██║  ██║ ███████╗
-      ╚═════╝   ╚═════╝         ╚═╝ ╚═╝  ╚═╝ ╚══════╝
-```
 
-
-![Screenshot 2025-07-02 23-19-20](https://github.com/user-attachments/assets/b38f0417-4686-4ecd-965a-14286ba43ccd)
+![Screenshot 2025-07-02 23-19-20](https://github.com/user-attachments/assets/cee3e079-aea7-4f95-8069-2c9e020840ca)
 
 
 `go-irl` is a complete, open-source streaming stack designed for creating robust and resilient IRL (In Real Life) broadcasts. It acts as a self-hosted receiver for popular SRTLA bonding clients, allowing you to achieve professional-quality streams over unstable network conditions.
