@@ -1,8 +1,6 @@
 # go-irl: A modern SRTLA Streaming Stack
 
-
 ![Screenshot 2025-07-02 23-19-20](https://github.com/user-attachments/assets/cee3e079-aea7-4f95-8069-2c9e020840ca)
-
 
 `go-irl` is a complete, open-source streaming stack designed for creating robust and resilient IRL (In Real Life) broadcasts. It acts as a self-hosted receiver for popular SRTLA bonding clients, allowing you to achieve professional-quality streams over unstable network conditions.
 
@@ -88,6 +86,7 @@ Follow these steps to download the tools, run the stack, and configure OBS.
       Simply double-click the `go-irl-windows.bat` file,
 
       or run it from Command Prompt:
+
       ```cmd
       go-irl-windows.bat
       ```
@@ -101,7 +100,6 @@ Now, configure OBS to receive the stream and use the bridge for stats and scene 
 1.  **Create Scenes:**
 
     - Create two scenes in OBS. For this guide, we'll name them **`ONLINE`** and **`OFFLINE`**. The `OFFLINE` scene can contain a "Be Right Back" message, an image, or a video loop.
-  
 
 <img width="500" src="https://github.com/user-attachments/assets/d90b5a8f-1f70-4b68-a5c8-df5397d29bf9" />
 
@@ -115,7 +113,7 @@ Now, configure OBS to receive the stream and use the bridge for stats and scene 
     - In the "Input Format" field, enter `mpegts`.
     - **IMPORTANT:** **Uncheck** the box for `Restart playback when source becomes active`. This prevents the video from stuttering every time `obs-srt-bridge` switches back to this scene.
     - Click OK.
-  
+
 <img width="800" src="https://github.com/user-attachments/assets/cecc8460-1fa0-420f-8310-9307849e9703" />
 
 3.  **Add the Browser Source (Stats and Scene Switching):**
