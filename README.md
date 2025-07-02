@@ -40,55 +40,38 @@ Follow these steps to download the tools, run the stack, and configure OBS.
 
 - **OBS Studio Installed**: You must have a recent version of [OBS Studio](https://obsproject.com/).
 - **Publicly Accessible Port**: Your PC must be accessible from the internet on the port you choose for `go-srtla` (the default is port **5000**). This usually requires **port forwarding** on your home router to direct incoming traffic on TCP/UDP port 5000 to your PC's local IP address.
+- **Custom Config**: If you need to use a different port or set an SRT passphrase, open the launcher script (`go-irl.sh` / `_go-irl.ps1`) and adjust the command-line flags accordingly.
 
 ---
 
 ### Part 1: Download and Run the Stack
 
-1.  **Clone This Repository**
+1.  **Get the Launcher and Binaries (choose one)**:
 
-    Choose one of the following methods:
+    **Option A — Download the all-in-one _go-irl_ bundle**  
+    Pre-built bundles for Windows, Linux, and macOS are published on this repository's
+    [Releases](https://github.com/e04/go-irl/releases) page. Download the archive that matches your operating system / architecture:
 
-    - **Using Git Command**:
+    1. Extract the archive to any folder you like.
+    2. The extracted directory already contains **all three component binaries** and the launcher script(s) for your platform, so you can proceed directly to the next step.
 
-      ```bash
-      git clone https://github.com/e04/go-irl.git
-      cd go-irl
-      ```
-
-    - **Using ZIP Download**:
-      1.  Visit the [go-irl repository](https://github.com/e04/go-irl)
-      2.  Click the green "Code" button and select "Download ZIP".
-      3.  Extract the downloaded ZIP file to your desired location.
-
-2.  **Download the Binaries**:
-    Download the latest pre-built binaries for each component from the links below and place them in your cloned `go-irl` repository directory (the same directory as the launcher script):
+    **Option B — Download each component manually**  
+    If you prefer to assemble the stack yourself (or want to use custom builds), **clone or download this repository first** to obtain the launcher scripts, then download the latest binaries for each component and place them in the same folder:
 
     - [**go-srtla Releases**](https://github.com/e04/go-srtla/releases)
     - [**srt-live-reporter Releases**](https://github.com/e04/srt-live-reporter/releases)
     - [**obs-srt-bridge Releases**](https://github.com/e04/obs-srt-bridge/releases)
 
-    Your directory should look like this:
+    After placing the executables, your directory should resemble the example shown above (with platform-specific file extensions).
 
-    ```
-    .
-    ├── README.md
-    ├── go-srtla
-    ├── srt-live-reporter
-    ├── obs-srt-bridge
-    ├── go-irl.sh         # Linux/macOS
-    ├── go-irl-windows.bat  # Windows
-    └── _go-irl.ps1       # Windows Helper
-    ```
-
-3.  **(Linux/macOS) Make the Script Executable**:
+2.  **(Linux/macOS) Make the Script Executable**:
     Windows users can skip this step. Open your terminal, navigate to the project directory, and run:
 
     ```bash
     chmod +x go-irl.sh
     ```
 
-4.  **Run the Stack**:
+3.  **Run the Stack**:
     Execute the appropriate launcher to start all three services in a single terminal window.
 
     - **Linux/macOS**:
@@ -161,13 +144,3 @@ Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX)
     - The port `5000` is the default port listened on by `go-srtla` via the launcher script.
 
 You are now ready to start streaming!
-
-### How the Launcher Script Works (Default Ports)
-
-The `go-irl` launcher script simplifies setup by running all components with pre-configured default settings. Here is how the data flows:
-
-1.  **`go-srtla`**: Listens for incoming SRTLA connections on port **5000**. It aggregates the streams and forwards a single SRT stream to `127.0.0.1:5001`.
-2.  **`srt-live-reporter`**: Listens for the SRT stream from `go-srtla` on port **5001**. It then forwards the video data to OBS via UDP on port **5002** and starts a WebSocket server on port **8888** for statistics.
-3.  **`obs-srt-bridge`**: Starts a web server on port **9999**, which serves the OBS Browser Source you add to your scene.
-
-> ** NOTE:** If you want to use different port numbers or add an SRT encryption passphrase, edit the launcher scripts (`go-irl.sh` on Linux/macOS, `_go-irl.ps1` on Windows). These scripts are where the ports and passphrase passed to each component are defined and can be customised.
