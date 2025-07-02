@@ -28,16 +28,41 @@ The `go-irl` stack is built upon three key components that work in tandem:
 
 ### How It Works
 
-The data flows through the components to create a resilient and automated workflow:
+The data flows through the components to create a resilient and automated workflow. The launcher script manages all three components automatically.
+
+<img width="1671" alt="3app" src="https://github.com/user-attachments/assets/39afdd63-dfc6-4bcb-b066-f8510dfc055d" />
 
 ## Getting Started
 
-The easiest way to run the `go-irl` stack is by using the included manager script.
+Follow these steps to download the tools, run the stack, and configure OBS.
 
-### Quick Start Guide
+### Prerequisites
 
-1.  **Download the Binaries**:
-    Download the latest pre-built binaries for each component and place them in the same directory as the launcher script (`go-irl.sh`, `go-irl-windows.bat`).
+- **OBS Studio Installed**: You must have a recent version of [OBS Studio](https://obsproject.com/).
+- **Publicly Accessible Port**: Your PC must be accessible from the internet on the port you choose for `go-srtla` (the default is port **5000**). This usually requires **port forwarding** on your home router to direct incoming traffic on TCP/UDP port 5000 to your PC's local IP address.
+
+---
+
+### Part 1: Download and Run the Stack
+
+1.  **Clone This Repository**
+
+    Choose one of the following methods:
+
+    - **Using Git Command**:
+
+      ```bash
+      git clone https://github.com/e04/go-irl.git
+      cd go-irl
+      ```
+
+    - **Using ZIP Download**:
+      1.  Visit the [go-irl repository](https://github.com/e04/go-irl)
+      2.  Click the green "Code" button and select "Download ZIP".
+      3.  Extract the downloaded ZIP file to your desired location.
+
+2.  **Download the Binaries**:
+    Download the latest pre-built binaries for each component from the links below and place them in your cloned `go-irl` repository directory (the same directory as the launcher script):
 
     - [**go-srtla Releases**](https://github.com/e04/go-srtla/releases)
     - [**srt-live-reporter Releases**](https://github.com/e04/srt-live-reporter/releases)
@@ -47,25 +72,24 @@ The easiest way to run the `go-irl` stack is by using the included manager scrip
 
     ```
     .
+    ├── README.md
     ├── go-srtla
     ├── srt-live-reporter
     ├── obs-srt-bridge
-    ├── go-irl.sh   # Linux/macOS
+    ├── go-irl.sh         # Linux/macOS
     ├── go-irl-windows.bat  # Windows
-    └── _go-irl.ps1 # Windows
+    └── _go-irl.ps1       # Windows Helper
     ```
 
-2.  **(Linux/macOS) Make the Script Executable**:
-    Windows users can skip this step.
-
-    Open your terminal, navigate to the project directory, and run:
+3.  **(Linux/macOS) Make the Script Executable**:
+    Windows users can skip this step. Open your terminal, navigate to the project directory, and run:
 
     ```bash
     chmod +x go-irl.sh
     ```
 
-3.  **Run the Stack**:
-    Execute the appropriate launcher to start all services:
+4.  **Run the Stack**:
+    Execute the appropriate launcher to start all three services in a single terminal window.
 
     - **Linux/macOS**:
 
@@ -73,8 +97,77 @@ The easiest way to run the `go-irl` stack is by using the included manager scrip
       ./go-irl.sh
       ```
 
-    - **Windows (CMD)**:
-
+    - **Windows**:
+      Simply double-click the `go-irl-windows.bat` file, or run it from Command Prompt:
       ```cmd
-      go-irl.bat
+      go-irl-windows.bat
       ```
+
+    Leave this terminal window running. It manages all the components.
+
+---
+
+### Part 2: Configure OBS Studio
+
+Now, configure OBS to receive the stream and use the bridge for stats and scene switching.
+
+1.  **Create Scenes:**
+
+    - Create two scenes in OBS. For this guide, we'll name them **`ONLINE`** and **`OFFLINE`**. The `OFFLINE` scene can contain a "Be Right Back" message, an image, or a video loop.
+
+2.  **Add the Media Source (Video Feed):**
+
+    - Go to the **`ONLINE`** scene.
+    - Add a new source by clicking the `+` button in the "Sources" dock and select **Media Source**.
+    - Give it a name (e.g., "SRT Feed").
+    - **Uncheck** the box for "Local File".
+    - In the "Input" field, enter `udp://127.0.0.1:5002`.
+    - In the "Input Format" field, enter `mpegts`.
+    - **IMPORTANT:** **Uncheck** the box for `Restart playback when source becomes active`. This prevents the video from stuttering every time `obs-srt-bridge` switches back to this scene.
+    - Click OK.
+
+3.  **Add the Browser Source (Stats and Scene Switching):**
+
+    - In the **`ONLINE`** scene, add a new source by clicking `+` and selecting **Browser**.
+    - Give it a name (e.g., "SRT Stats").
+    - In the "URL" field, enter the following URL. You can customize the parameters as needed.
+
+      ```
+      http://localhost:9999/app?wsport=8888&onlineSceneName=ONLINE&offlineSceneName=OFFLINE&type=simple
+      ```
+
+      - `wsport=8888`: Tells the bridge to connect to the WebSocket on port **8888** (from `srt-live-reporter`).
+      - `onlineSceneName=ONLINE`: The name of your "good connection" scene.
+      - `offlineSceneName=OFFLINE`: The name of your "bad connection" scene.
+      - `type=simple`: The display type for stats. Can be `simple`, `graph`, or `none`.
+
+    - Set the Width and Height as desired.
+    - **IMPORTANT:** For automatic scene switching to work, scroll down in the properties window and set **Page permissions** to **Advanced access to OBS**.
+    - Click OK.
+
+---
+
+### Part 3: Configure Your Mobile App
+
+Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX).
+
+1.  Set the destination URL to point to your PC's **public IP address** and the port you configured for `go-srtla`.
+
+    ```
+    srtla://<YOUR_PUBLIC_IP_ADDRESS>:5000
+    ```
+
+    - Replace `<YOUR_PUBLIC_IP_ADDRESS>` with your actual public IP. You can find this by searching "what is my IP" in a browser on your PC.
+    - The port `5000` is the default port listened on by `go-srtla` via the launcher script.
+
+You are now ready to start streaming!
+
+### How the Launcher Script Works (Default Ports)
+
+The `go-irl` launcher script simplifies setup by running all components with pre-configured default settings. Here is how the data flows:
+
+1.  **`go-srtla`**: Listens for incoming SRTLA connections on port **5000**. It aggregates the streams and forwards a single SRT stream to `127.0.0.1:5001`.
+2.  **`srt-live-reporter`**: Listens for the SRT stream from `go-srtla` on port **5001**. It then forwards the video data to OBS via UDP on port **5002** and starts a WebSocket server on port **8888** for statistics.
+3.  **`obs-srt-bridge`**: Starts a web server on port **9999**, which serves the OBS Browser Source you add to your scene.
+
+> ** NOTE:** If you want to use different port numbers or add an SRT encryption passphrase, edit the launcher scripts (`go-irl.sh` on Linux/macOS, `_go-irl.ps1` on Windows). These scripts are where the ports and passphrase passed to each component are defined and can be customised.
