@@ -40,27 +40,23 @@ try {
             [string[]]$Arguments
         )
 
-        while ($true) {
-            if (-not (Test-Path -Path $Command -PathType Leaf)) {
-                Write-Host "[Manager] ERROR: Binary for '$Name' not found at the expected path: '$Command'." -ForegroundColor Red
-                throw "Required binary '$Command' not found."
-            }
-
-            Write-Host "[Manager] Starting '$Name' with arguments: $($Arguments -join ' ')" -ForegroundColor Cyan
-            
-            & $Command $Arguments *>&1 | ForEach-Object {
-                $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-                Write-Host "[$Name`:$timestamp] $_"
-            }
-            
-            $exitCode = $LASTEXITCODE
-
-            Write-Host "[Manager] Process '$Name' exited with code $exitCode. Restarting in 5 seconds..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 5
+        if (-not (Test-Path -Path $Command -PathType Leaf)) {
+            Write-Host "[Manager] ERROR: Binary for '$Name' not found at the expected path: '$Command'." -ForegroundColor Red
+            throw "Required binary '$Command' not found."
         }
+
+        Write-Host "[Manager] Starting '$Name' with arguments: $($Arguments -join ' ')" -ForegroundColor Cyan
+        
+        & $Command $Arguments *>&1 | ForEach-Object {
+            $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+            Write-Host "[$Name`:$timestamp] $_"
+        }
+        
+        $exitCode = $LASTEXITCODE
+
+        Write-Host "[Manager] Process '$Name' exited with code $exitCode." -ForegroundColor Yellow
     }
 
-    # ASCII Art
     @"
 
 
@@ -88,8 +84,7 @@ try {
         StartAndMonitor -Name "obs-srt-bridge" -Command $using:OBS_SRT_BRIDGE_BIN -Arguments $using:OBS_SRT_BRIDGE_ARGS
     }
 
-
-    while ($true) {
+    while ($jobs | Where-Object { $_.State -eq 'Running' }) {
         $jobs | ForEach-Object {
             $output = Receive-Job -Job $_
             if ($output) {
@@ -98,6 +93,8 @@ try {
         }
         Start-Sleep -Milliseconds 200
     }
+
+    $jobs | Receive-Job | ForEach-Object { Write-Host $_ }
 }
 finally {
     Get-Job | Stop-Job -Force

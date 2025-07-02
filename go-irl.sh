@@ -53,31 +53,28 @@ start_and_monitor() {
     shift
     local cmd_and_args=("$@")
 
-    while true; do
-        if [ ! -x "${cmd_and_args[0]}" ]; then
-            echo -e "[Manager] ERROR: Binary for '$name' not found or not executable at '${cmd_and_args[0]}'.
-            Please ensure the binary exists and has execute permissions (e.g., 'chmod +x ${cmd_and_args[0]}').
-            You can download the latest pre-built binary from: https://github.com/e04/$name/releases/"
-            return 1
-        fi
+    if [ ! -x "${cmd_and_args[0]}" ]; then
+        echo -e "[Manager] ERROR: Binary for '$name' not found or not executable at '${cmd_and_args[0]}'.
+        Please ensure the binary exists and has execute permissions (e.g., 'chmod +x ${cmd_and_args[0]}').
+        You can download the latest pre-built binary from: https://github.com/e04/$name/releases/"
+        return 1
+    fi
 
-        echo "[Manager] Starting '$name'..."
-        
-        "${cmd_and_args[@]}" 2>&1 | while IFS= read -r line || [ -n "$line" ]; do
-            printf '[%s:%s] %s\n' "$name" "$(date +'%Y-%m-%d %H:%M:%S')" "$line"
-        done
-        
-        exit_code=${PIPESTATUS[0]}
+    echo "[Manager] Starting '$name'..."
 
-        if [ "$exit_code" -eq 137 ]; then
-            echo "[Manager] Process '$name' was killed (SIGKILL). Shutting down manager and child processes."
-            kill -TERM "$PPID" 2>/dev/null
-            exit 1
-        fi
-
-        echo "[Manager] Process '$name' exited with code ${exit_code}. Restarting in 5 seconds..."
-        sleep 5
+    "${cmd_and_args[@]}" 2>&1 | while IFS= read -r line || [ -n "$line" ]; do
+        printf '[%s:%s] %s\n' "$name" "$(date +'%Y-%m-%d %H:%M:%S')" "$line"
     done
+
+    exit_code=${PIPESTATUS[0]}
+
+    if [ "$exit_code" -eq 137 ]; then
+        echo "[Manager] Process '$name' was killed (SIGKILL). Shutting down manager and child processes."
+        kill -TERM "$PPID" 2>/dev/null
+        exit 1
+    fi
+
+    echo "[Manager] Process '$name' exited with code ${exit_code}."
 }
 
 # --- Main Execution ---
