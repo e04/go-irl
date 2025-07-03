@@ -91,6 +91,10 @@ Follow these steps to download the tools, run the stack, and configure OBS.
       go-irl-windows.bat
       ```
 
+After running the script, your terminal will look like this:
+
+<img width="709" src="https://github.com/user-attachments/assets/684f1a45-1ed2-4baf-9f16-baa141ac566a" />
+
 ---
 
 ### Part 2: Configure OBS Studio
