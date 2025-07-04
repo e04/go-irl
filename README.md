@@ -157,3 +157,7 @@ Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX)
     - The port `5000` is the default port listened on by `go-srtla` via the launcher script.
 
 You are now ready to start streaming!
+
+## License
+
+This project is released under the terms of the **GNU AFFERO GENERAL PUBLIC LICENSE Version 3**. See the [LICENSE](LICENSE) file for details.

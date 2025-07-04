@@ -51,8 +51,13 @@ jobs:
               echo "Downloading ${BIN_ZIP_URL} ..."
               curl -sSL "${BIN_ZIP_URL}" -o "/tmp/${TOOL}-${ARCH}.zip"
               unzip -q -j "/tmp/${TOOL}-${ARCH}.zip" -d "${DIST_DIR}/"
+              # Rename bundled README.md to include the tool name and avoid collisions
+              if [[ -f "${DIST_DIR}/README.md" ]]; then mv "${DIST_DIR}/README.md" "${DIST_DIR}/README-${TOOL}.md"; fi
               chmod +x "${DIST_DIR}/${TOOL}"* || true
             done
+
+            # Include repository README (force overwrite to avoid prompts)
+            cp -f README.md "${DIST_DIR}/"
 
             # Package the distribution directory
             zip -qr "${DIST_DIR}.zip" "${DIST_DIR}"
