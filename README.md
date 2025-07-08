@@ -46,7 +46,53 @@ Follow these steps to download the tools, run the stack, and configure OBS.
 
 ---
 
-### Part 1: Download and Run the Stack
+### Part 1: Configure OBS Studio
+
+First, configure OBS to receive the stream and use the bridge for stats and scene switching.
+
+1.  **Create Scenes:**
+
+    - Create two scenes in OBS. For this guide, we'll name them **`ONLINE`** and **`OFFLINE`**. The `OFFLINE` scene can contain a "Be Right Back" message, an image, or a video loop.
+
+<img width="500" src="https://github.com/user-attachments/assets/d90b5a8f-1f70-4b68-a5c8-df5397d29bf9" />
+
+2.  **Add the Media Source (Video Feed):**
+
+    - Go to the **`ONLINE`** scene.
+    - Add a new source by clicking the `+` button in the "Sources" dock and select **Media Source**.
+    - Give it a name (e.g., "SRT Feed").
+    - **Uncheck** the box for "Local File".
+    - In the "Input" field, enter `udp://127.0.0.1:5002`.
+    - In the "Input Format" field, enter `mpegts`.
+    - **IMPORTANT:** **Uncheck** the box for `Restart playback when source becomes active`. This prevents the video from stuttering every time `obs-srt-bridge` switches back to this scene.
+    - Click OK.
+
+<img width="800" src="https://github.com/user-attachments/assets/cecc8460-1fa0-420f-8310-9307849e9703" />
+
+3.  **Add the Browser Source (Stats and Scene Switching):**
+
+    - In the **`ONLINE`** scene, add a new source by clicking `+` and selecting **Browser**.
+    - Give it a name (e.g., "SRT Stats").
+    - In the "URL" field, enter the following URL. You can customize the parameters as needed.
+
+      ```
+      http://localhost:9999/app?wsport=8888&onlineSceneName=ONLINE&offlineSceneName=OFFLINE&type=simple
+      ```
+
+      - `wsport=8888`: Tells the bridge to connect to the WebSocket on port **8888** (from `srt-live-reporter`).
+      - `onlineSceneName=ONLINE`: The name of your "good connection" scene.
+      - `offlineSceneName=OFFLINE`: The name of your "bad connection" scene.
+      - `type=simple`: The display type for stats. Can be `simple`, `graph`, or `none`.
+
+    - Set the Width and Height as desired.
+    - **IMPORTANT:** For automatic scene switching to work, scroll down in the properties window and set **Page permissions** to **Advanced access to OBS**.
+    - Click OK.
+
+<img width="800" src="https://github.com/user-attachments/assets/6bb9e601-a2e1-453c-98e0-ea6488f838e4" />
+
+---
+
+### Part 2: Download and Run the Stack
 
 1.  **Get the Launcher and Binaries (choose one)**:
 
@@ -95,51 +141,9 @@ After running the script, your terminal will look like this:
 
 <img width="709" src="https://github.com/user-attachments/assets/684f1a45-1ed2-4baf-9f16-baa141ac566a" />
 
----
+If it cannot be started, make sure OBS is running and scene setup is complete.
 
-### Part 2: Configure OBS Studio
-
-Now, configure OBS to receive the stream and use the bridge for stats and scene switching.
-
-1.  **Create Scenes:**
-
-    - Create two scenes in OBS. For this guide, we'll name them **`ONLINE`** and **`OFFLINE`**. The `OFFLINE` scene can contain a "Be Right Back" message, an image, or a video loop.
-
-<img width="500" src="https://github.com/user-attachments/assets/d90b5a8f-1f70-4b68-a5c8-df5397d29bf9" />
-
-2.  **Add the Media Source (Video Feed):**
-
-    - Go to the **`ONLINE`** scene.
-    - Add a new source by clicking the `+` button in the "Sources" dock and select **Media Source**.
-    - Give it a name (e.g., "SRT Feed").
-    - **Uncheck** the box for "Local File".
-    - In the "Input" field, enter `udp://127.0.0.1:5002`.
-    - In the "Input Format" field, enter `mpegts`.
-    - **IMPORTANT:** **Uncheck** the box for `Restart playback when source becomes active`. This prevents the video from stuttering every time `obs-srt-bridge` switches back to this scene.
-    - Click OK.
-
-<img width="800" src="https://github.com/user-attachments/assets/cecc8460-1fa0-420f-8310-9307849e9703" />
-
-3.  **Add the Browser Source (Stats and Scene Switching):**
-
-    - In the **`ONLINE`** scene, add a new source by clicking `+` and selecting **Browser**.
-    - Give it a name (e.g., "SRT Stats").
-    - In the "URL" field, enter the following URL. You can customize the parameters as needed.
-
-      ```
-      http://localhost:9999/app?wsport=8888&onlineSceneName=ONLINE&offlineSceneName=OFFLINE&type=simple
-      ```
-
-      - `wsport=8888`: Tells the bridge to connect to the WebSocket on port **8888** (from `srt-live-reporter`).
-      - `onlineSceneName=ONLINE`: The name of your "good connection" scene.
-      - `offlineSceneName=OFFLINE`: The name of your "bad connection" scene.
-      - `type=simple`: The display type for stats. Can be `simple`, `graph`, or `none`.
-
-    - Set the Width and Height as desired.
-    - **IMPORTANT:** For automatic scene switching to work, scroll down in the properties window and set **Page permissions** to **Advanced access to OBS**.
-    - Click OK.
-
-<img width="800" src="https://github.com/user-attachments/assets/6bb9e601-a2e1-453c-98e0-ea6488f838e4" />
+If the port is already occupied and cannot be started, edit the script to change the port number.
 
 ---
 
