@@ -46,7 +46,27 @@ Follow these steps to download the tools, run the stack, and configure OBS.
 
 ---
 
-### Part 1: Configure OBS Studio
+### Part 1: Download the Launcher and Binaries
+
+**Option A — Download the all-in-one _go-irl_ bundle**  
+Pre-built bundles for Windows, Linux, and macOS are published on this repository's
+[Releases](https://github.com/e04/go-irl/releases) page. Download the archive that matches your operating system / architecture:
+
+1. Extract the archive to any folder you like.
+2. The extracted directory already contains **all three component binaries** and the launcher script(s) for your platform, so you can proceed directly to the next step.
+
+**Option B — Download each component manually**  
+If you prefer to assemble the stack yourself (or want to use custom builds), **clone or download this repository first** to obtain the launcher scripts, then download the latest binaries for each component and place them in the same folder:
+
+- [**go-srtla Releases**](https://github.com/e04/go-srtla/releases)
+- [**srt-live-reporter Releases**](https://github.com/e04/srt-live-reporter/releases)
+- [**obs-srt-bridge Releases**](https://github.com/e04/obs-srt-bridge/releases)
+
+After placing the executables, your directory should resemble the example shown above (with platform-specific file extensions).
+
+---
+
+### Part 2: Configure OBS Studio
 
 First, configure OBS to receive the stream and use the bridge for stats and scene switching.
 
@@ -92,50 +112,25 @@ First, configure OBS to receive the stream and use the bridge for stats and scen
 
 ---
 
-### Part 2: Download and Run the Stack
+### Part 3: Run the Stack
 
-1.  **Get the Launcher and Binaries (choose one)**:
+ **Run the Stack**:
+Execute the appropriate launcher to start all three services in a single terminal window.
 
-    **Option A — Download the all-in-one _go-irl_ bundle**  
-    Pre-built bundles for Windows, Linux, and macOS are published on this repository's
-    [Releases](https://github.com/e04/go-irl/releases) page. Download the archive that matches your operating system / architecture:
+- **Linux/macOS**:
 
-    1. Extract the archive to any folder you like.
-    2. The extracted directory already contains **all three component binaries** and the launcher script(s) for your platform, so you can proceed directly to the next step.
+  ```bash
+  ./go-irl.sh
+  ```
 
-    **Option B — Download each component manually**  
-    If you prefer to assemble the stack yourself (or want to use custom builds), **clone or download this repository first** to obtain the launcher scripts, then download the latest binaries for each component and place them in the same folder:
+- **Windows**:
+  Simply double-click the `go-irl-windows.bat` file,
 
-    - [**go-srtla Releases**](https://github.com/e04/go-srtla/releases)
-    - [**srt-live-reporter Releases**](https://github.com/e04/srt-live-reporter/releases)
-    - [**obs-srt-bridge Releases**](https://github.com/e04/obs-srt-bridge/releases)
+  or run it from Command Prompt:
 
-    After placing the executables, your directory should resemble the example shown above (with platform-specific file extensions).
-
-2.  **(Linux/macOS) Make the Script Executable**:
-    Windows users can skip this step. Open your terminal, navigate to the project directory, and run:
-
-    ```bash
-    chmod +x go-irl.sh
-    ```
-
-3.  **Run the Stack**:
-    Execute the appropriate launcher to start all three services in a single terminal window.
-
-    - **Linux/macOS**:
-
-      ```bash
-      ./go-irl.sh
-      ```
-
-    - **Windows**:
-      Simply double-click the `go-irl-windows.bat` file,
-
-      or run it from Command Prompt:
-
-      ```cmd
-      go-irl-windows.bat
-      ```
+  ```cmd
+  go-irl-windows.bat
+  ```
 
 After running the script, your terminal will look like this:
 
@@ -147,7 +142,7 @@ If the port is already occupied and cannot be started, edit the script to change
 
 ---
 
-### Part 3: Configure Your Mobile App
+### Part 4: Configure Your Mobile App
 
 Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX).
 
