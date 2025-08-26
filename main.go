@@ -19,6 +19,15 @@ var (
 	verbose    = flag.Bool("verbose", false, "Enable verbose logging in srtla")
 )
 
+var logo = `
+ ██████╗   ██████╗         ██╗ ██████╗  ██╗     
+██╔════╝  ██╔═══██╗        ██║ ██╔══██╗ ██║     
+██║  ███╗ ██║   ██║ █████╗ ██║ ██████╔╝ ██║     
+██║   ██║ ██║   ██║ ╚════╝ ██║ ██╔══██╗ ██║     
+╚██████╔╝ ╚██████╔╝        ██║ ██║  ██║ ███████╗
+ ╚═════╝   ╚═════╝         ╚═╝ ╚═╝  ╚═╝ ╚══════╝
+`
+
 func getFreePort() (int, error) {
 	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
@@ -35,6 +44,8 @@ func getFreePort() (int, error) {
 
 func main() {
 	flag.Parse()
+
+	log.Print(logo)
 
 	if *passphrase != "" && len(*passphrase) < 10 {
 		log.Fatalf("Passphrase must be at least 10 characters long")
