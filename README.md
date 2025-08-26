@@ -159,7 +159,7 @@ This project builds upon the excellent work of several open-source projects:
 
 This project includes a Go translation and implementation of the SRTLA protocol based on the original implementation by irlserver. We are grateful for their pioneering work in developing the SRTLA bonding protocol that enables reliable streaming over multiple network connections.
 
-### [github.com/datarhei/gosrt](https://github.com/datarhei/gosrt) - SRT Protocol Implementation
+### [datarhei/gosrt](https://github.com/datarhei/gosrt) - SRT Protocol Implementation
 
 The SRT functionality in this project is implemented using the gosrt library and is inspired by the sample code provided in their [contrib/client](https://github.com/datarhei/gosrt/tree/main/contrib/client) directory. We appreciate their comprehensive SRT implementation and helpful examples that made this integration possible.
 
