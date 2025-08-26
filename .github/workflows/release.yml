@@ -9,18 +9,9 @@ permissions:
   contents: write
 
 jobs:
-  approval:
-    name: Approval Required
-    runs-on: ubuntu-latest
-    environment: release
-    
-    steps:
-      - name: Manual approval checkpoint
-        run: echo "Release approved for ${{ github.ref_name }}"
   build-posix:
     name: Build (Linux & macOS)
     runs-on: ubuntu-latest
-    needs: approval
 
     steps:
       - name: Checkout code
@@ -97,7 +88,6 @@ jobs:
   build-windows:
     name: Build Windows x64
     runs-on: windows-latest
-    needs: approval
 
     steps:
       - name: Checkout code
