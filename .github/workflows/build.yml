@@ -1,26 +1,15 @@
-name: Release
+name: Build
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  approval:
-    name: Approval Required
-    runs-on: ubuntu-latest
-    environment: release
-    
-    steps:
-      - name: Manual approval checkpoint
-        run: echo "Release approved for ${{ github.ref_name }}"
   build-posix:
     name: Build (Linux & macOS)
     runs-on: ubuntu-latest
-    needs: approval
 
     steps:
       - name: Checkout code
@@ -97,7 +86,6 @@ jobs:
   build-windows:
     name: Build Windows x64
     runs-on: windows-latest
-    needs: approval
 
     steps:
       - name: Checkout code
@@ -142,21 +130,3 @@ jobs:
         with:
           name: windows-zip
           path: dist/go-irl-windows-x64.zip
-
-  release:
-    name: Create Release
-    needs: [build-posix, build-windows]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/**/*.zip
-          draft: false
-          prerelease: false
