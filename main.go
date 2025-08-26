@@ -45,7 +45,7 @@ func getFreePort() (int, error) {
 func main() {
 	flag.Parse()
 
-	log.Print(logo)
+	fmt.Println(logo)
 
 	if *passphrase != "" && len(*passphrase) < 10 {
 		log.Fatalf("Passphrase must be at least 10 characters long")
@@ -54,8 +54,6 @@ func main() {
 	if *passphrase == "" {
 		log.Println("WARNING: No passphrase set. SRT stream will be unencrypted.")
 	}
-
-	log.SetFlags(0)
 
 	internalSrtPort, err := getFreePort()
 	if err != nil {

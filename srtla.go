@@ -438,8 +438,6 @@ func resolveSRTAddr(host string, port uint16) (*net.UDPAddr, error) {
 func runSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) {
 	if verbose {
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
-	} else {
-		log.SetFlags(0)
 	}
 
 	var err error

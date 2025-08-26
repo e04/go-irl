@@ -20,7 +20,7 @@ func runBrowserSource(port int) {
 		}
 	})
 
-	fmt.Printf("Browser Source address: http://127.0.0.1:%d/app\n", port)
+	log.Printf("Browser Source address: http://127.0.0.1:%d/app\n", port)
 
 	err := http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), mux)
 	if err != nil {
