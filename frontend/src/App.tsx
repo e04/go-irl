@@ -12,7 +12,7 @@ function App() {
   const onlineSceneName = urlParams.get("onlineSceneName") || "ONLINE";
   const offlineSceneName = urlParams.get("offlineSceneName") || "OFFLINE";
 
-  const { messages, isReceiving, isDisconnected } = useWebSocket({
+  const { messages, isDisconnected } = useWebSocket({
     url: ENDPOINT,
     onConnected: () => {
       console.log("connected");
@@ -50,7 +50,6 @@ function App() {
         return (
           <SimpleText
             data={data}
-            isReceiving={isReceiving}
             isDisconnected={isDisconnected}
           />
         );
@@ -58,7 +57,6 @@ function App() {
         return (
           <Graph
             data={data}
-            isReceiving={isReceiving}
             isDisconnected={isDisconnected}
           />
         );

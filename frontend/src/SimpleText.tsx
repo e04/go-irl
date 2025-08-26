@@ -5,15 +5,10 @@ interface SimpleTextProps {
     rtt: number;
     loss: number;
   } | null>;
-  isReceiving: boolean;
   isDisconnected: boolean;
 }
 
-export function SimpleText({
-  data,
-  isReceiving,
-  isDisconnected,
-}: SimpleTextProps) {
+export function SimpleText({ data, isDisconnected }: SimpleTextProps) {
   const nonNullData = data.filter((d) => d != null);
   const lastItem = nonNullData[nonNullData.length - 1];
 
@@ -39,7 +34,6 @@ export function SimpleText({
             : (nonNullData[nonNullData.length - 1]?.loss ?? 0) > 0.05
             ? "#FFC107"
             : "#8BC34A",
-          opacity: isReceiving ? 1 : 0.25,
           borderRadius: 12,
           width: 12,
           height: 12,

@@ -7,7 +7,6 @@ const CONNECTION_WAIT_TIME = 5000;
 const LOSS_RATE_HISTORY_SIZE = 3;
 const HIGH_LOSS_RATE_THRESHOLD = 20;
 const LOW_LOSS_RATE_THRESHOLD = 5;
-const RECEIVING_INDICATOR_DURATION = 100;
 const RECONNECT_DELAY = 1000;
 const MESSAGE_INTERVAL = 32;
 
@@ -29,7 +28,6 @@ export function useWebSocket({
   >(Array.from({ length: MAX_MESSAGES }, () => null));
   const socket = useRef<WebSocket | null>(null);
   const lastReceivedTime = useRef<number>(0);
-  const [isReceiving, setIsReceiving] = useState(false);
   const previousConnectionState = useRef<boolean | null>(null);
 
   const lossRateHistory = useRef<number[]>([]);
@@ -84,9 +82,6 @@ export function useWebSocket({
 
       const now = Date.now();
       lastReceivedTime.current = now;
-
-      setIsReceiving(true);
-      setTimeout(() => setIsReceiving(false), RECEIVING_INDICATOR_DURATION);
 
       const next = [...prev, parsed.data];
       if (next.length > MAX_MESSAGES) next.shift();
@@ -150,5 +145,5 @@ export function useWebSocket({
     onGoodConnection,
   ]);
 
-  return { messages, isReceiving, isDisconnected };
+  return { messages, isDisconnected };
 }

@@ -12,11 +12,9 @@ const DURATION = 1000 * 60;
 
 export const Graph = ({
   data,
-  isReceiving,
   isDisconnected,
 }: {
   data: (DataItem | null)[];
-  isReceiving: boolean;
   isDisconnected: boolean;
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -153,7 +151,6 @@ export const Graph = ({
             : (nonNullData[nonNullData.length - 1]?.loss ?? 0) > 0.05
             ? "#FFC107"
             : "#8BC34A",
-          opacity: isReceiving ? 1 : 0.25,
           borderRadius: 12,
           width: 12,
           height: 12,
