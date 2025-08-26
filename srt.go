@@ -297,7 +297,7 @@ func openSrtStream(addr string) (io.ReadCloser, error) {
 }
 
 func openUDPWriter(addr string) (io.WriteCloser, error) {
-    u, err := url.Parse(addr)
+	u, err := url.Parse(addr)
 	if err != nil {
 		return nil, err
 	}
