@@ -11,11 +11,12 @@ import (
 )
 
 var (
-	bsPort    = flag.Int("bs-port", 9999, "Port for the Browser Source web app")
-	toAddr    = flag.Int("udp-port", 5002, "Port for the UDP down stream")
-	wsPort    = flag.Int("ws-port", 8888, "WebSocket server port")
-	srtlaPort = flag.Int("srtla-port", 5000, "Port for the SRTLA upstream")
-	verbose   = flag.Bool("verbose", false, "Enable verbose logging in srtla")
+	bsPort     = flag.Int("bs-port", 9999, "Port for the Browser Source web app")
+	toAddr     = flag.Int("udp-port", 5002, "Port for the UDP down stream")
+	wsPort     = flag.Int("ws-port", 8888, "WebSocket server port")
+	srtlaPort  = flag.Int("srtla-port", 5000, "Port for the SRTLA upstream")
+	passphrase = flag.String("passphrase", "", "Passphrase for SRT stream encryption")
+	verbose    = flag.Bool("verbose", false, "Enable verbose logging in srtla")
 )
 
 func getFreePort() (int, error) {
@@ -35,16 +36,27 @@ func getFreePort() (int, error) {
 func main() {
 	flag.Parse()
 
+	if *passphrase != "" && len(*passphrase) < 10 {
+		log.Fatalf("Passphrase must be at least 10 characters long")
+	}
+
+	if *passphrase == "" {
+		log.Println("WARNING: No passphrase set. SRT stream will be unencrypted.")
+	}
+
 	log.SetFlags(0)
 
 	internalSrtPort, err := getFreePort()
 	if err != nil {
 		log.Fatalf("Failed to find a free port for internal SRT: %v", err)
 	}
-	
+
 	log.Printf("Using dynamic port %d for internal SRT communication.", internalSrtPort)
 
 	fromAddr := fmt.Sprintf("srt://127.0.0.1:%d?mode=listener", internalSrtPort)
+	if *passphrase != "" {
+		fromAddr = fmt.Sprintf("srt://127.0.0.1:%d?mode=listener&passphrase=%s", internalSrtPort, *passphrase)
+	}
 
 	go runBrowserSource(*bsPort)
 
