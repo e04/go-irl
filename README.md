@@ -1,14 +1,14 @@
-# go-irl: A modern SRTLA Streaming Stack
+# go-irl: A modern SRTLA Server
 
 ![Screenshot 2025-07-02 23-19-20](https://github.com/user-attachments/assets/cee3e079-aea7-4f95-8069-2c9e020840ca)
 
-`go-irl` is a complete, open-source streaming stack designed for creating robust and resilient IRL (In Real Life) broadcasts. It acts as a self-hosted receiver for popular SRTLA bonding clients, allowing you to achieve professional-quality streams over unstable network conditions.
+`go-irl` is a complete, open-source SRTLA server designed for creating robust and resilient IRL (In Real Life) broadcasts. It acts as a self-hosted receiver for popular SRTLA bonding clients, allowing you to achieve professional-quality streams over unstable network conditions.
 
-**This stack is fully compatible with mobile and hardware clients like [IRL Pro](https://irlpro.app/) (Android), [Moblin](https://github.com/eerimoq/moblin/) (iOS), and [BELABOX](https://belabox.net/).**
+**This program is fully compatible with mobile and hardware clients like [IRL Pro](https://irlpro.app/) (Android), [Moblin](https://github.com/eerimoq/moblin/) (iOS), and [BELABOX](https://belabox.net/).**
 
 ## Key Features
 
-- **Free and Open Source**: This entire stack is free and open-source, giving you full control and transparency over your streaming infrastructure without licensing fees.
+- **Free and Open Source**: This program is free and open-source, giving you full control and transparency over your streaming infrastructure without licensing fees.
 - **Cross-Platform & Docker-Free**: Runs natively on Windows, macOS, and Linux with pre-built binaries. No complex Docker setups or virtualization needed—just download the executables and run.
 - **Network Bonding**: Combine multiple internet connections to increase bandwidth and reliability, minimizing the impact of packet loss from any single connection.
 - **Intelligent Automatic Scene Switching**: `go-irl` uses detailed SRT statistics like **packet loss** to make smarter switching decisions. It automatically switches to a predefined "offline" scene when network quality degrades and seamlessly returns to your main scene once the connection stabilizes.
@@ -57,7 +57,7 @@ Run with verbose logging enabled:
 
 ## Getting Started
 
-Follow these steps to download the tools, run the stack, and configure OBS.
+Follow these steps to download the tools, and configure OBS.
 
 ### Prerequisites
 
