@@ -117,17 +117,17 @@ First, configure OBS to receive the stream and use the bridge for stats and scen
         | graph  | <img width="347" alt="スクリーンショット 2025-06-29 22 41 47" src="https://github.com/user-attachments/assets/bd77524d-f5ae-43ce-84b9-616bca1e6110" /> |
         | none   | (none, just for switching scene)       
 
+        **Metric Explanations (left to right):**
+        
+        - Bitrate (Mbps)
+        - RTT (ms)
+        - Packet Loss (%)
     - Set the Width and Height as desired.
     - **IMPORTANT:** For automatic scene switching to work, scroll down in the properties window and set **Page permissions** to **Advanced access to OBS**.
     - Click OK.
 
 <img width="800" src="https://github.com/user-attachments/assets/6bb9e601-a2e1-453c-98e0-ea6488f838e4" />
-                                                                                                                       |
-**Metric Explanations (left to right):**
-
-- Bitrate (Mbps)
-- RTT (ms)
-- Packet Loss (%)
+                                                                                                                       
 
 ---
 
