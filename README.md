@@ -87,7 +87,7 @@ First, configure OBS to receive the stream and use the bridge for stats and scen
 
     - Go to the **`ONLINE`** scene.
     - Add a new source by clicking the `+` button in the "Sources" dock and select **Media Source**.
-    - Give it a name (e.g., "SRT Feed").
+    - Give it a name (e.g., "SRTLA Stream").
     - **Uncheck** the box for "Local File".
     - In the "Input" field, enter `udp://127.0.0.1:5002`.
     - In the "Input Format" field, enter `mpegts`.
@@ -99,7 +99,7 @@ First, configure OBS to receive the stream and use the bridge for stats and scen
 1.  **Add the Browser Source (Stats and Scene Switching):**
 
     - In the **`ONLINE`** scene, add a new source by clicking `+` and selecting **Browser**.
-    - Give it a name (e.g., "SRT Stats").
+    - Give it a name (e.g., "Stats").
     - In the "URL" field, enter the following URL. You can customize the parameters as needed.
 
       ```
