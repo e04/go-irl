@@ -144,7 +144,7 @@ First, configure OBS to receive the stream and use the bridge for stats and scen
 
 If it cannot be started, make sure OBS is running and scene setup is complete.
 
-If the port is already occupied and cannot be started, edit the script to change the port number.
+If the port is already occupied and cannot be started, change the port number.
 
 ---
 
@@ -159,7 +159,7 @@ Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX)
     ```
 
     - Replace `<YOUR_PUBLIC_IP_ADDRESS>` with your actual public IP. You can find this by searching "what is my IP" in a browser on your PC.
-    - The port `5000` is the default port listened on by `go-srtla` via the launcher script.
+    - The port `5000` is the default port listened on by `go-srtla`.
 
 You are now ready to start streaming!
 
