@@ -13,6 +13,7 @@
 - **Network Bonding**: Combine multiple internet connections to increase bandwidth and reliability, minimizing the impact of packet loss from any single connection.
 - **Intelligent Automatic Scene Switching**: `go-irl` uses detailed SRT statistics like **packet loss** to make smarter switching decisions. It automatically switches to a predefined "offline" scene when network quality degrades and seamlessly returns to your main scene once the connection stabilizes.
 - **Real-time Health Monitoring**: Get a clear, visual overview of your stream's performance with live statistics displayed directly in OBS.
+- **Flexible Deployment Options**: Supports multiple operation modes including standalone mode for simple setups, and server/client mode for scenarios where port forwarding is not possible, allowing you to deploy the server component on a VPS while running the client locally.
 
 ## Command Line Options
 
@@ -20,23 +21,31 @@ The `go-irl` application supports several command line options to customize its 
 
 ### Available Options
 
+- **`-mode`** (default: `standalone`)  
+  Operation mode for the application. Available modes:
+  - **`standalone`**: Default mode. Runs both SRTLA server and SRT proxy on the same machine. Use this when you can open ports directly on your streaming computer.
+  - **`server`**: Runs only the SRTLA server component. Use this when deploying on a VPS or cloud server with public IP access.
+  - **`client`**: Runs the SRT proxy, browser source, and WebSocket server. Use this on your local machine when the SRTLA server is running on a remote VPS.
+
+**Note:** Use server/client mode when you cannot open ports on your home network due to router restrictions, ISP limitations, or firewall policies. In this setup, deploy the server component on a VPS or cloud server with public IP access, and run the client component locally where OBS is installed.
+
+- **`-srtPort`** (required for `server` and `clent` modes, default: `5001`)  
+  SRT port for communication between server and client modes. In server mode, this is the port where the SRT stream will be output. In client mode, this is the port where the client will connect to receive the SRT stream from the server.
+
 - **`-bs-port`** (default: `9999`)  
-  Port for the Browser Source web application. This is the port where the web interface for displaying stream statistics will be served.
+  Port for the Browser Source web application. This is the port where the web interface for displaying stream statistics will be served. Available in `client` and `standalone` modes.
 
 - **`-udp-port`** (default: `5002`)  
-  Port for the UDP downstream. This is the port where the processed stream will be output for OBS to consume.
+  Port for the UDP downstream. This is the port where the processed stream will be output for OBS to consume. Available in `client` and `standalone` modes.
 
 - **`-ws-port`** (default: `8888`)  
-  WebSocket server port. This port is used for real-time communication between the stream processor and the browser source for displaying statistics and enabling automatic scene switching.
+  WebSocket server port. This port is used for real-time communication between the stream processor and the browser source for displaying statistics and enabling automatic scene switching. Available in `client` and `standalone` modes.
 
 - **`-srtla-port`** (default: `5000`)  
-  Port for the SRTLA upstream. This is the port where your mobile streaming client (IRL Pro, Moblin, BELABOX, etc.) will connect to send the bonded stream.
+  Port for the SRTLA upstream. This is the port where your mobile streaming client (IRL Pro, Moblin, BELABOX, etc.) will connect to send the bonded stream. Available in `server` and `standalone` modes.
 
 - **`-passphrase`** (default: `""`)  
-  Optional passphrase for SRT encryption. When set, both the server and client must use the same passphrase to establish a secure encrypted connection. This adds an extra layer of security to your stream.
-
-- **`-verbose`** (default: `false`)  
-  Enable verbose logging in SRTLA. Use this flag to get detailed logging information for troubleshooting connection issues.
+  Optional passphrase for SRT encryption. When set, both the server and client must use the same passphrase to establish a secure encrypted connection. This adds an extra layer of security to your stream. Available in `client` and `standalone` modes.
 
 ## Getting Started
 
@@ -111,7 +120,6 @@ First, configure OBS to receive the stream and use the bridge for stats and scen
     - Click OK.
 
 <img width="800" src="https://github.com/user-attachments/assets/6bb9e601-a2e1-453c-98e0-ea6488f838e4" />
-
 
 ---
 
