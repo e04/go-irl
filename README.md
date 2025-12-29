@@ -29,8 +29,11 @@ The `go-irl` application supports several command line options to customize its 
 
 **Note:** Use server/client mode when you cannot open ports on your home network due to router restrictions, ISP limitations, or firewall policies. In this setup, deploy the server component on a VPS or cloud server with public IP access, and run the client component locally where OBS is installed.
 
-- **`-srtPort`** (required for `server` and `clent` modes, default: `5001`)  
+- **`-srt-port`** (required for `server` and `client` modes, default: `5001`)  
   SRT port for communication between server and client modes. In server mode, this is the port where the SRT stream will be output. In client mode, this is the port where the client will connect to receive the SRT stream from the server.
+
+- **`-srt-host`** (default: `127.0.0.1`)  
+  SRT output host address. In server mode, this specifies the IP address of the client machine where the SRT stream will be sent. Use this when running server and client on different machines (e.g., `-srt-host=192.168.1.200` to send to a client at that IP). Available in `server` mode only.
 
 - **`-bs-port`** (default: `9999`)  
   Port for the Browser Source web application. This is the port where the web interface for displaying stream statistics will be served. Available in `client` and `standalone` modes.
@@ -154,6 +157,30 @@ Finally, configure your mobile streaming app (e.g., IRL Pro, Moblin, or BELABOX)
     - The port `5000` is the default port listened on by `go-srtla`.
 
 You are now ready to start streaming!
+
+## Server/Client Mode
+
+Use server/client mode when you cannot open ports on your home network. In this setup, deploy the server on a VPS with a public IP, and connect the VPS and your local machine using a VPN service like [Tailscale](https://tailscale.com/) or similar.
+
+### Setup
+
+Assuming your VPS has a public IP `203.0.113.50` and an internal IP `10.0.0.1` (via VPN), and your local machine has an internal IP `10.0.0.2`:
+
+**On the VPS (internal IP: 10.0.0.1):**
+
+> Make sure UDP port 5000 is open in your VPS firewall settings.
+
+```bash
+./go-irl -mode=server -srtla-port=5000 -srt-host=10.0.0.2 -srt-port=5001
+```
+
+**On your local machine (internal IP: 10.0.0.2, where OBS is running):**
+
+```bash
+./go-irl -mode=client -srt-port=5001
+```
+
+Then configure your mobile app to send SRTLA to `srtla://203.0.113.50:5000?mode=caller`.
 
 ## Acknowledgments
 

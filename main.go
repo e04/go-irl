@@ -12,7 +12,8 @@ import (
 
 var (
 	mode    = flag.String("mode", "", "Operation mode: server | client | standalone (default: standalone)")
-	srtPort = flag.Int("srtPort", 5001, "SRT port (standalone/server)")
+	srtPort = flag.Int("srt-port", 5001, "SRT port (standalone/server)")
+	srtHost = flag.String("srt-host", "127.0.0.1", "SRT output host address (server mode)")
 
 	srtlaPort = flag.Int("srtla-port", 5000, "Port for the SRTLA upstream (standalone/server)")
 
@@ -69,9 +70,9 @@ func runServerMode() {
 		log.Fatalf("ERROR: server mode requires -srtPort (1-65535)")
 	}
 
-	log.Printf("[server mode] SRTLA listen port: %d  Output SRT port: %d", *srtlaPort, *srtPort)
+	log.Printf("[server mode] SRTLA listen port: %d  Output SRT: %s:%d", *srtlaPort, *srtHost, *srtPort)
 
-	go runSrtla(uint(*srtlaPort), "0.0.0.0", uint(*srtPort), *verbose)
+	go runSrtla(uint(*srtlaPort), *srtHost, uint(*srtPort), *verbose)
 
 	waitForSignal()
 }
