@@ -545,7 +545,7 @@ func resolveSRTAddr(host string, port uint16) (*net.UDPAddr, error) {
 	}
 	// Fallback to first IP even if handshake failed
 	if len(addrs) == 0 {
-		return nil, fmt.Errorf("no IPs for host %s", host)
+		return nil, fmt.Errorf("No IP addresses found for host %s", host)
 	}
 	log.Printf("Warning: Failed to confirm SRT server is reachable. Proceeding with first address.")
 	return &net.UDPAddr{IP: addrs[0], Port: int(port)}, nil
