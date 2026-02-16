@@ -196,6 +196,10 @@ The SRT functionality in this project is implemented using the gosrt library and
 
 ## License
 
+<details>
+
+<summary>GNU AFFERO GENERAL PUBLIC LICENSE Version 3</summary>
+
 ```
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
@@ -859,3 +863,5 @@ if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 ```
+
+</details>
