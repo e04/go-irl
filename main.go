@@ -17,6 +17,8 @@ var (
 
 	srtlaPort = flag.Int("srtla-port", 5000, "Port for the SRTLA upstream (standalone/server)")
 
+	metricsPort = flag.Int("metrics-port", 9090, "Port for Prometheus /metrics endpoint (standalone/server, 0 to disable)")
+
 	bsPort     = flag.Int("bs-port", 9999, "Port for the Browser Source web app (client/standalone)")
 	wsPort     = flag.Int("ws-port", 8888, "WebSocket server port (client/standalone)")
 	udpPort    = flag.Int("udp-port", 5002, "Port for the UDP down stream (client/standalone)")
@@ -72,6 +74,9 @@ func runServerMode() {
 
 	log.Printf("[server mode] SRTLA listen port: %d  Output SRT: %s:%d", *srtlaPort, *srtHost, *srtPort)
 
+	if *metricsPort > 0 {
+		go runMetricsServer(*metricsPort)
+	}
 	go runSrtla(uint(*srtlaPort), *srtHost, uint(*srtPort), *verbose)
 
 	waitForSignal()
@@ -119,6 +124,9 @@ func runStandaloneMode() {
 	}
 
 	go runBrowserSource(*bsPort)
+	if *metricsPort > 0 {
+		go runMetricsServer(*metricsPort)
+	}
 	go runSrtla(uint(*srtlaPort), "127.0.0.1", uint(internalSrtPort), *verbose)
 	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort)
 	waitForEither(srtDoneChan)
