@@ -2,13 +2,14 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"io"
 	"log"
-	mathrand "math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -41,8 +42,8 @@ const (
 	MaxGroups        = 200
 
 	CleanupPeriod   = 3 * time.Second
-	GroupTimeout    = 4 * time.Second
-	ConnTimeout     = 4 * time.Second
+	GroupTimeout    = 30 * time.Second
+	ConnTimeout     = 15 * time.Second
 	KeepalivePeriod = 1 * time.Second
 
 	SendBufSize = 100 * 1024 * 1024 // 100 MB
@@ -58,24 +59,15 @@ func constantTimeCompare(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	var diff byte
-	for i := 0; i < len(a); i++ {
-		diff |= a[i] ^ b[i]
-	}
-	return diff == 0
+	return subtle.ConstantTimeCompare(a, b) == 1
 }
 
-func randomBytes(n int) []byte {
+func randomBytes(n int) ([]byte, error) {
 	b := make([]byte, n)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		// crypto/rand should never fail on *nix, fall back to math/rand if it
-		// ever does.
-		log.Printf("Warning: crypto/rand failed (%v); falling back to pseudo-rand", err)
-		for i := range b {
-			b[i] = byte(mathrand.Intn(256))
-		}
+	if _, err := rand.Read(b); err != nil {
+		return nil, fmt.Errorf("crypto/rand failed: %w", err)
 	}
-	return b
+	return b, nil
 }
 
 func udpAddrEqual(a, b *net.UDPAddr) bool {
@@ -87,7 +79,7 @@ func udpAddrEqual(a, b *net.UDPAddr) bool {
 
 type Conn struct {
 	addr     *net.UDPAddr
-	lastRcvd time.Time
+	lastRcvd atomic.Int64            // UnixNano
 	recvIdx  int                     // next slot in recvLog
 	recvLog  [RecvACKInterval]uint32 // SRT sequence numbers for SRTLA ACK
 }
@@ -169,13 +161,18 @@ func findByAddr(addr *net.UDPAddr) (g *Group, c *Conn) {
 	return nil, nil
 }
 
-func newGroup(clientID []byte) *Group {
+func newGroup(clientID []byte) (*Group, error) {
 	var g Group
 	g.createdAt = time.Now()
 
+	randomID, err := randomBytes(SRTLAIDLen / 2)
+	if err != nil {
+		return nil, err
+	}
+
 	copy(g.id[:SRTLAIDLen/2], clientID)
-	copy(g.id[SRTLAIDLen/2:], randomBytes(SRTLAIDLen/2))
-	return &g
+	copy(g.id[SRTLAIDLen/2:], randomID)
+	return &g, nil
 }
 
 func sendRegErr(addr *net.UDPAddr) {
@@ -185,7 +182,10 @@ func sendRegErr(addr *net.UDPAddr) {
 }
 
 func registerGroup(addr *net.UDPAddr, pkt []byte) {
-	if len(groups) >= MaxGroups {
+	groupsMu.RLock()
+	atCapacity := len(groups) >= MaxGroups
+	groupsMu.RUnlock()
+	if atCapacity {
 		log.Printf("[%s] Registration failed: Max groups reached", addr)
 		sendRegErr(addr)
 		return
@@ -200,7 +200,12 @@ func registerGroup(addr *net.UDPAddr, pkt []byte) {
 
 	clientID := make([]byte, SRTLAIDLen/2)
 	copy(clientID, pkt[2:2+SRTLAIDLen/2])
-	g := newGroup(clientID)
+	g, err := newGroup(clientID)
+	if err != nil {
+		log.Printf("[%s] Registration failed: %v", addr, err)
+		sendRegErr(addr)
+		return
+	}
 
 	// store last addr so that no other group can register from it
 	g.lastAddr = addr
@@ -268,7 +273,9 @@ func registerConn(addr *net.UDPAddr, pkt []byte) {
 
 	g.mu.Lock()
 	if existingConn == nil {
-		g.conns = append(g.conns, &Conn{addr: addr, lastRcvd: time.Now()})
+		conn := &Conn{addr: addr}
+		conn.lastRcvd.Store(time.Now().UnixNano())
+		g.conns = append(g.conns, conn)
 	}
 	g.lastAddr = addr
 	g.mu.Unlock()
@@ -288,6 +295,9 @@ func startSRTReader(g *Group) {
 			}
 			n, err := conn.Read(buf)
 			if err != nil || n < SRTMinLen {
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
 				log.Printf("[group %p] Failed to read the SRT sock (n=%d, err=%v), terminating the group", g, n, err)
 				removeGroup(g)
 				return
@@ -345,7 +355,7 @@ func handleSRTLAIncoming(pkt []byte, addr *net.UDPAddr) {
 		return // not part of any group
 	}
 
-	c.lastRcvd = now
+	c.lastRcvd.Store(now.UnixNano())
 
 	if isSRTLAKeepalive(pkt) {
 		// Echo back the keepalive.  Do NOT update lastAddr for keepalives
@@ -405,16 +415,10 @@ func ensureGroupSocket(g *Group) bool {
 		return false
 	}
 	if err := conn.SetReadBuffer(RecvBufSize); err != nil {
-		log.Printf("[group %p] Failed to set receive buffer: %v", g, err)
-		conn.Close()
-		removeGroup(g)
-		return false
+		log.Printf("[group %p] Warning: failed to set receive buffer: %v", g, err)
 	}
 	if err := conn.SetWriteBuffer(SendBufSize); err != nil {
-		log.Printf("[group %p] Failed to set send buffer: %v", g, err)
-		conn.Close()
-		removeGroup(g)
-		return false
+		log.Printf("[group %p] Warning: failed to set send buffer: %v", g, err)
 	}
 
 	g.mu.Lock()
@@ -474,12 +478,13 @@ func cleanup() {
 		g.mu.Lock()
 		var newConns []*Conn
 		for _, c := range g.conns {
-			if now.Sub(c.lastRcvd) >= ConnTimeout {
+			lastRcvd := time.Unix(0, c.lastRcvd.Load())
+			if now.Sub(lastRcvd) >= ConnTimeout {
 				log.Printf("[%s] [group %p] Connection removed (timed out)", c.addr, g)
 				continue
 			}
 			// Send keepalive to connections that haven't been heard from recently
-			if now.Sub(c.lastRcvd) >= KeepalivePeriod {
+			if now.Sub(lastRcvd) >= KeepalivePeriod {
 				sendKeepalive(c)
 			}
 			newConns = append(newConns, c)
@@ -580,8 +585,11 @@ func runSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) {
 		for {
 			n, addr, err := srtlaSock.ReadFromUDP(buf)
 			if err != nil {
-				log.Printf("read error: %v", err)
-				continue
+				if errors.Is(err, net.ErrClosed) {
+					return
+				}
+				log.Printf("read error, stopping SRTLA reader: %v", err)
+				return
 			}
 			pkt := make([]byte, n)
 			copy(pkt, buf[:n])
