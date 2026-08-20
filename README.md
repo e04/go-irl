@@ -12,8 +12,8 @@
 - **Cross-Platform & Docker-Free**: Runs natively on Windows, macOS, and Linux with pre-built binaries. No complex Docker setups or virtualization needed—just download the executables and run.
 - **Network Bonding**: Combine multiple internet connections to increase bandwidth and reliability, minimizing the impact of packet loss from any single connection.
 - **Intelligent Automatic Scene Switching**: `go-irl` uses detailed SRT statistics like **packet loss** to make smarter switching decisions. It automatically switches to a predefined "offline" scene when network quality degrades and seamlessly returns to your main scene once the connection stabilizes.
-- **Real-time Health Monitoring**: Get a clear, visual overview of your stream's performance with live statistics displayed directly in OBS.
-- **Flexible Deployment Options**: Supports multiple operation modes including standalone mode for simple setups, and server/client mode for scenarios where port forwarding is not possible, allowing you to deploy the server component on a VPS while running the client locally.
+- **Real-time Health Monitoring**: Get a clear, visual overview of your stream's performance with live statistics displayed directly in OBS. In server/client mode, the VPS forwards the mobile-to-VPS SRT statistics to the local client over a dedicated encrypted telemetry stream.
+- **Flexible Deployment Options**: Supports standalone mode for simple setups and a VPN-free server/client mode for networks where home port forwarding is not possible. The local client initiates its SRT connection to a public VPS, so it also works behind typical NAT and CGNAT connections.
 
 ## Command Line Options
 
@@ -24,16 +24,16 @@ The `go-irl` application supports several command line options to customize its 
 - **`-mode`** (default: `standalone`)  
   Operation mode for the application. Available modes:
   - **`standalone`**: Default mode. Runs both SRTLA server and SRT proxy on the same machine. Use this when you can open ports directly on your streaming computer.
-  - **`server`**: Runs only the SRTLA server component. Use this when deploying on a VPS or cloud server with public IP access.
-  - **`client`**: Runs the SRT proxy, browser source, and WebSocket server. Use this on your local machine when the SRTLA server is running on a remote VPS.
+  - **`server`**: Runs the SRTLA receiver and downstream SRT relay. Use this on a VPS or cloud server with public IP access.
+  - **`client`**: Connects to the VPS as an SRT caller and runs the OBS proxy, browser source, and WebSocket server. Use this on your local machine without opening an inbound port.
 
 **Note:** Use server/client mode when you cannot open ports on your home network due to router restrictions, ISP limitations, or firewall policies. In this setup, deploy the server component on a VPS or cloud server with public IP access, and run the client component locally where OBS is installed.
 
 - **`-srt-port`** (required for `server` and `client` modes, default: `5001`)  
-  SRT port for communication between server and client modes. In server mode, this is the port where the SRT stream will be output. In client mode, this is the port where the client will connect to receive the SRT stream from the server.
+  UDP port used for the downstream SRT connection. The server listens on this port and the client connects to it as a caller.
 
 - **`-srt-host`** (default: `127.0.0.1`)  
-  SRT output host address. In server mode, this specifies the IP address of the client machine where the SRT stream will be sent. Use this when running server and client on different machines (e.g., `-srt-host=192.168.1.200` to send to a client at that IP). Available in `server` mode only.
+  Public IP address or hostname of the VPS. Available in `client` mode only.
 
 - **`-bs-port`** (default: `9999`)  
   Port for the Browser Source web application. This is the port where the web interface for displaying stream statistics will be served. Available in `client` and `standalone` modes.
@@ -48,7 +48,7 @@ The `go-irl` application supports several command line options to customize its 
   Port for the SRTLA upstream. This is the port where your mobile streaming client (IRL Pro, Moblin, BELABOX, etc.) will connect to send the bonded stream. Available in `server` and `standalone` modes.
 
 - **`-passphrase`** (default: `""`)  
-  Optional passphrase for SRT encryption. When set, both the server and client must use the same passphrase to establish a secure encrypted connection. This adds an extra layer of security to your stream. Available in `client` and `standalone` modes.
+  Optional passphrase for SRT encryption. In server/client mode, configure the same passphrase on the mobile sender, server, and client. Passphrases must be at least 10 characters long.
 
 ## Getting Started
 
@@ -57,7 +57,7 @@ Follow these steps to download the tools, and configure OBS.
 ### Prerequisites
 
 - **OBS Studio Installed**: You must have a recent version of [OBS Studio](https://obsproject.com/).
-- **Publicly Accessible Port**: Your PC must be accessible from the internet on the port you choose for `go-srtla` (the default is port **5000**). This usually requires **port forwarding** on your home router to direct incoming traffic on TCP/UDP port 5000 to your PC's local IP address.
+- **Network access**: Standalone mode requires UDP port **5000** to be forwarded to your PC. Server/client mode does not require a public home port; only the VPS needs public UDP ports **5000** and **5001**.
 
 ---
 
@@ -160,27 +160,35 @@ You are now ready to start streaming!
 
 ## Server/Client Mode
 
-Use server/client mode when you cannot open ports on your home network. In this setup, deploy the server on a VPS with a public IP, and connect the VPS and your local machine using a VPN service like [Tailscale](https://tailscale.com/) or similar.
+Use server/client mode when you cannot open ports on your home network. The mobile sender remains an SRTLA caller, and the local client also initiates an outbound SRT connection to the VPS. No VPN or home router port forwarding is required.
+
+The client opens separate media and statistics connections to the same VPS SRT port. The statistics shown in OBS—including RTT, bitrate, and packet-loss-based scene switching—come from the mobile-to-VPS SRT connection rather than the usually clean VPS-to-home connection. No additional telemetry port is required.
 
 ### Setup
 
-Assuming your VPS has a public IP `203.0.113.50` and an internal IP `10.0.0.1` (via VPN), and your local machine has an internal IP `10.0.0.2`:
+Assuming your VPS has the public IP `203.0.113.50`:
 
-**On the VPS (internal IP: 10.0.0.1):**
+**On the VPS:**
 
-> Make sure UDP port 5000 is open in your VPS firewall settings.
-
-```bash
-./go-irl -mode=server -srtla-port=5000 -srt-host=10.0.0.2 -srt-port=5001
-```
-
-**On your local machine (internal IP: 10.0.0.2, where OBS is running):**
+> Open UDP ports `5000` (mobile SRTLA input) and `5001` (client SRT connection) in the VPS firewall.
 
 ```bash
-./go-irl -mode=client -srt-port=5001
+./go-irl -mode=server -srtla-port=5000 -srt-port=5001 -passphrase=change-this-passphrase
 ```
 
-Then configure your mobile app to send SRTLA to `srtla://203.0.113.50:5000?mode=caller`.
+**On your local machine where OBS is running:**
+
+```bash
+./go-irl -mode=client -srt-host=203.0.113.50 -srt-port=5001 -passphrase=change-this-passphrase
+```
+
+Then configure your mobile app to send SRTLA to:
+
+```
+srtla://203.0.113.50:5000?mode=caller&passphrase=change-this-passphrase
+```
+
+The client reconnects automatically if the VPS or mobile stream is temporarily unavailable. If you intentionally run without encryption, omit `-passphrase` everywhere and remove it from the mobile URL.
 
 ## Acknowledgments
 

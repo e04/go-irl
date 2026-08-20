@@ -5,22 +5,24 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 )
 
 var (
 	mode    = flag.String("mode", "", "Operation mode: server | client | standalone (default: standalone)")
-	srtPort = flag.Int("srt-port", 5001, "SRT port (standalone/server)")
-	srtHost = flag.String("srt-host", "127.0.0.1", "SRT output host address (server mode)")
+	srtPort = flag.Int("srt-port", 5001, "SRT downstream port (server/client)")
+	srtHost = flag.String("srt-host", "127.0.0.1", "Remote SRT server host address (client mode)")
 
 	srtlaPort = flag.Int("srtla-port", 5000, "Port for the SRTLA upstream (standalone/server)")
 
 	bsPort     = flag.Int("bs-port", 9999, "Port for the Browser Source web app (client/standalone)")
 	wsPort     = flag.Int("ws-port", 8888, "WebSocket server port (client/standalone)")
 	udpPort    = flag.Int("udp-port", 5002, "Port for the UDP down stream (client/standalone)")
-	passphrase = flag.String("passphrase", "", "Passphrase for SRT stream encryption (client/standalone)")
+	passphrase = flag.String("passphrase", "", "Passphrase for SRT stream encryption")
 
 	verbose = flag.Bool("verbose", false, "Enable verbose logging in srtla (server/standalone)")
 )
@@ -48,6 +50,25 @@ func getFreePort() (int, error) {
 	return l.LocalAddr().(*net.UDPAddr).Port, nil
 }
 
+func makeSRTURL(host string, port int, mode, passphrase, streamID string) string {
+	u := url.URL{
+		Scheme: "srt",
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+	}
+	query := u.Query()
+	if mode != "" {
+		query.Set("mode", mode)
+	}
+	if passphrase != "" {
+		query.Set("passphrase", passphrase)
+	}
+	if streamID != "" {
+		query.Set("streamid", streamID)
+	}
+	u.RawQuery = query.Encode()
+	return u.String()
+}
+
 func main() {
 	flag.Parse()
 
@@ -67,19 +88,46 @@ func main() {
 
 func runServerMode() {
 	if *srtPort <= 0 || *srtPort > 65535 {
-		log.Fatalf("ERROR: server mode requires -srtPort (1-65535)")
+		log.Fatalf("ERROR: server mode requires -srt-port (1-65535)")
+	}
+	if *srtlaPort <= 0 || *srtlaPort > 65535 {
+		log.Fatalf("ERROR: server mode requires -srtla-port (1-65535)")
+	}
+	if *srtPort == *srtlaPort {
+		log.Fatalf("ERROR: -srt-port and -srtla-port must be different")
+	}
+	if *passphrase != "" && len(*passphrase) < 10 {
+		log.Fatalf("ERROR: Passphrase must be at least 10 characters long")
+	}
+	if *passphrase == "" {
+		log.Println("WARNING: No passphrase set. Both SRT legs will be unencrypted.")
 	}
 
-	log.Printf("[server mode] SRTLA listen port: %d  Output SRT: %s:%d", *srtlaPort, *srtHost, *srtPort)
+	relay := newSRTRelay(*passphrase)
+	relayAddr := net.JoinHostPort("0.0.0.0", strconv.Itoa(*srtPort))
+	relayServer, err := relay.newServer(relayAddr)
+	if err != nil {
+		log.Fatalf("ERROR: %v", err)
+	}
 
-	go runSrtla(uint(*srtlaPort), *srtHost, uint(*srtPort), *verbose)
+	log.Printf("[server mode] SRTLA input UDP :%d  Downstream SRT UDP :%d", *srtlaPort, *srtPort)
 
-	waitForSignal()
+	relayDone := make(chan error, 1)
+	go func() {
+		relayDone <- relayServer.Serve()
+	}()
+	go runSrtla(uint(*srtlaPort), "127.0.0.1", uint(*srtPort), *verbose)
+
+	waitForRelay(relayDone)
+	relayServer.Shutdown()
 }
 
 func runClientMode() {
 	if *srtPort <= 0 || *srtPort > 65535 {
-		log.Fatalf("ERROR: client mode requires -srtPort (1-65535)")
+		log.Fatalf("ERROR: client mode requires -srt-port (1-65535)")
+	}
+	if *srtHost == "" {
+		log.Fatalf("ERROR: client mode requires -srt-host")
 	}
 	if *passphrase != "" && len(*passphrase) < 10 {
 		log.Fatalf("ERROR: Passphrase must be at least 10 characters long")
@@ -88,15 +136,13 @@ func runClientMode() {
 		log.Println("WARNING: No passphrase set. SRT stream will be unencrypted.")
 	}
 
-	fromAddr := fmt.Sprintf("srt://0.0.0.0:%d?mode=listener", *srtPort)
-	if *passphrase != "" {
-		fromAddr = fmt.Sprintf("srt://0.0.0.0:%d?mode=listener&passphrase=%s", *srtPort, *passphrase)
-	}
+	fromAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStreamID)
+	telemetryAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStatsStreamID)
 
-	log.Printf("[client mode] Listening SRT on %s", fromAddr)
+	log.Printf("[client mode] Connecting to SRT server %s:%d", *srtHost, *srtPort)
 
 	go runBrowserSource(*bsPort)
-	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort)
+	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort, telemetryAddr)
 	waitForEither(srtDoneChan)
 }
 
@@ -113,14 +159,11 @@ func runStandaloneMode() {
 		log.Fatalf("ERROR: failed to allocate internal SRT port: %v", err)
 	}
 
-	fromAddr := fmt.Sprintf("srt://127.0.0.1:%d?mode=listener", internalSrtPort)
-	if *passphrase != "" {
-		fromAddr = fmt.Sprintf("srt://127.0.0.1:%d?mode=listener&passphrase=%s", internalSrtPort, *passphrase)
-	}
+	fromAddr := makeSRTURL("127.0.0.1", internalSrtPort, "listener", *passphrase, "")
 
 	go runBrowserSource(*bsPort)
 	go runSrtla(uint(*srtlaPort), "127.0.0.1", uint(internalSrtPort), *verbose)
-	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort)
+	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort, "")
 	waitForEither(srtDoneChan)
 }
 
@@ -140,6 +183,21 @@ func waitForEither(srtDoneChan <-chan error) {
 			log.Printf("SRT proxy exited with error: %v", err)
 		} else {
 			log.Println("SRT proxy exited gracefully.")
+		}
+	case <-signalChan:
+		log.Println("Shutdown signal received, exiting.")
+	}
+}
+
+func waitForRelay(relayDone <-chan error) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-relayDone:
+		if err != nil {
+			log.Printf("SRT relay exited with error: %v", err)
+		} else {
+			log.Println("SRT relay exited gracefully.")
 		}
 	case <-signalChan:
 		log.Println("Shutdown signal received, exiting.")

@@ -181,7 +181,7 @@ func handleWebSocket(hub *hub, w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func runSrtProxy(from string, to string, wsPort int) <-chan error {
+func runSrtProxy(from string, to string, wsPort int, telemetryFrom string) <-chan error {
 	var hub *hub
 	if wsPort > 0 {
 		hub = newHub()
@@ -199,59 +199,60 @@ func runSrtProxy(from string, to string, wsPort int) <-chan error {
 			}
 		}()
 	}
+	useRemoteStats := hub != nil && telemetryFrom != ""
+	if useRemoteStats {
+		go runStatsTelemetry(telemetryFrom, hub)
+	}
 
 	doneChan := make(chan error, 1)
 
-	r, err := openSrtStream(from)
-	if err != nil {
-		doneChan <- fmt.Errorf("from: %w", err)
-		return doneChan
-	}
-
 	w, err := openUDPWriter(to)
 	if err != nil {
-		r.Close()
 		doneChan <- fmt.Errorf("to: %w", err)
 		return doneChan
 	}
 
 	go func() {
-		defer r.Close()
 		defer w.Close()
 
 		buffer := make([]byte, 2048)
 
 		s := &stats{
 			interval: time.Second,
-			reader:   r,
 			writer:   w,
 			hub:      hub,
 		}
 
 		for {
-			n, err := r.Read(buffer)
+			r, err := openSrtStream(from)
 			if err != nil {
-				log.Printf("\nSRT reader error: %v. Attempting to reconnect...", err)
-				r.Close()
-				for {
-					var reconnErr error
-					r, reconnErr = openSrtStream(from)
-					if reconnErr == nil {
-						log.Println("SRT reader reconnected successfully.")
-						s.reader = r
-						break
-					}
-					log.Printf("Failed to reconnect reader: %v. Retrying in 5 seconds...", reconnErr)
-					time.Sleep(5 * time.Second)
-				}
+				log.Printf("Failed to connect SRT reader: %v. Retrying in 5 seconds...", err)
+				time.Sleep(5 * time.Second)
 				continue
 			}
-
-			if _, err := w.Write(buffer[:n]); err != nil {
-				doneChan <- fmt.Errorf("write: %w", err)
-				return
+			log.Println("SRT reader connected.")
+			if !useRemoteStats {
+				s.reader = r
 			}
-			s.reportIfDue()
+
+			for {
+				n, err := r.Read(buffer)
+				if err != nil {
+					log.Printf("SRT reader error: %v. Attempting to reconnect...", err)
+					r.Close()
+					if !useRemoteStats {
+						s.reader = nil
+					}
+					break
+				}
+
+				if _, err := w.Write(buffer[:n]); err != nil {
+					r.Close()
+					doneChan <- fmt.Errorf("write: %w", err)
+					return
+				}
+				s.reportIfDue()
+			}
 		}
 	}()
 
@@ -267,6 +268,10 @@ func openSrtStream(addr string) (io.ReadCloser, error) {
 	config := srt.DefaultConfig()
 	if err := config.UnmarshalQuery(u.RawQuery); err != nil {
 		return nil, err
+	}
+
+	if u.Query().Get("mode") == "caller" {
+		return srt.Dial("srt", u.Host, config)
 	}
 
 	ln, err := srt.Listen("srt", u.Host, config)
