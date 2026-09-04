@@ -23,6 +23,7 @@ var (
 	wsPort     = flag.Int("ws-port", 8888, "WebSocket server port (client/standalone)")
 	udpPort    = flag.Int("udp-port", 5002, "Port for the UDP down stream (client/standalone)")
 	passphrase = flag.String("passphrase", "", "Passphrase for SRT stream encryption")
+	streamId   = flag.String("streamId", "", "SRT stream ID; must match the mobile SRTLA sender (all modes)")
 
 	verbose = flag.Bool("verbose", false, "Enable verbose logging in srtla (server/standalone)")
 )
@@ -103,7 +104,7 @@ func runServerMode() {
 		log.Println("WARNING: No passphrase set. Both SRT legs will be unencrypted.")
 	}
 
-	relay := newSRTRelay(*passphrase)
+	relay := newSRTRelay(*passphrase, *streamId)
 	relayAddr := net.JoinHostPort("0.0.0.0", strconv.Itoa(*srtPort))
 	relayServer, err := relay.newServer(relayAddr)
 	if err != nil {
@@ -136,8 +137,8 @@ func runClientMode() {
 		log.Println("WARNING: No passphrase set. SRT stream will be unencrypted.")
 	}
 
-	fromAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStreamID)
-	telemetryAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStatsStreamID)
+	fromAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamMediaStreamID(*streamId))
+	telemetryAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStatsStreamIDFor(*streamId))
 
 	log.Printf("[client mode] Connecting to SRT server %s:%d", *srtHost, *srtPort)
 
@@ -159,7 +160,7 @@ func runStandaloneMode() {
 		log.Fatalf("ERROR: failed to allocate internal SRT port: %v", err)
 	}
 
-	fromAddr := makeSRTURL("127.0.0.1", internalSrtPort, "listener", *passphrase, "")
+	fromAddr := makeSRTURL("127.0.0.1", internalSrtPort, "listener", *passphrase, *streamId)
 
 	go runBrowserSource(*bsPort)
 	go runSrtla(uint(*srtlaPort), "127.0.0.1", uint(internalSrtPort), *verbose)

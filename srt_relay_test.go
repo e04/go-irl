@@ -40,7 +40,7 @@ func TestSRTRelaySendsPublisherDataToCallingClient(t *testing.T) {
 	}
 
 	const passphrase = "test-passphrase"
-	relay := newSRTRelay(passphrase)
+	relay := newSRTRelay(passphrase, "")
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	server, err := relay.newServer(addr)
 	if err != nil {
@@ -100,7 +100,7 @@ func TestSRTRelaySendsUpstreamStatisticsToCallingClient(t *testing.T) {
 	}
 
 	const passphrase = "test-passphrase"
-	relay := newSRTRelay(passphrase)
+	relay := newSRTRelay(passphrase, "")
 	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	server, err := relay.newServer(addr)
 	if err != nil {

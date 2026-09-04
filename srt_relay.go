@@ -21,7 +21,10 @@ const (
 // A new pub/sub generation is created whenever the publisher disconnects so a
 // mobile stream can reconnect without restarting the process.
 type srtRelay struct {
-	passphrase string
+	passphrase    string
+	streamID      string
+	mediaStreamID string
+	statsStreamID string
 
 	mu              sync.Mutex
 	channel         srt.PubSub
@@ -30,22 +33,41 @@ type srtRelay struct {
 	publisherGen    uint64
 }
 
-func newSRTRelay(passphrase string) *srtRelay {
+func downstreamMediaStreamID(streamID string) string {
+	if streamID == "" {
+		return downstreamStreamID
+	}
+	return streamID + "-client"
+}
+
+func downstreamStatsStreamIDFor(streamID string) string {
+	if streamID == "" {
+		return downstreamStatsStreamID
+	}
+	return streamID + "-stats"
+}
+
+func newSRTRelay(passphrase, streamID string) *srtRelay {
 	return &srtRelay{
-		passphrase: passphrase,
-		channel:    srt.NewPubSub(srt.PubSubConfig{}),
+		passphrase:    passphrase,
+		streamID:      streamID,
+		mediaStreamID: downstreamMediaStreamID(streamID),
+		statsStreamID: downstreamStatsStreamIDFor(streamID),
+		channel:       srt.NewPubSub(srt.PubSubConfig{}),
 	}
 }
 
 func (r *srtRelay) handleConnect(req srt.ConnRequest) srt.ConnType {
 	mode := srt.REJECT
-	if req.StreamId() == downstreamStreamID || req.StreamId() == downstreamStatsStreamID {
+	if req.StreamId() == r.mediaStreamID || req.StreamId() == r.statsStreamID {
 		mode = srt.SUBSCRIBE
-	} else if isLoopbackAddr(req.RemoteAddr()) {
+	} else if isLoopbackAddr(req.RemoteAddr()) && (r.streamID == "" || req.StreamId() == r.streamID) {
 		// The SRTLA component always forwards its reconstructed SRT packets to
 		// this listener through 127.0.0.1. Do not allow a public connection to
 		// become the publisher.
 		mode = srt.PUBLISH
+	} else if req.StreamId() == r.mediaStreamID || req.StreamId() == downstreamStatsStreamID {
+		mode = srt.SUBSCRIBE
 	}
 
 	if mode == srt.REJECT || !r.authorize(req) {
@@ -100,7 +122,7 @@ func (r *srtRelay) handlePublish(conn srt.Conn) {
 }
 
 func (r *srtRelay) handleSubscribe(conn srt.Conn) {
-	if conn.StreamId() == downstreamStatsStreamID {
+	if conn.StreamId() == r.statsStreamID {
 		r.handleStatsSubscribe(conn)
 		return
 	}

@@ -47,6 +47,9 @@ The `go-irl` application supports several command line options to customize its 
 - **`-srtla-port`** (default: `5000`)  
   Port for the SRTLA upstream. This is the port where your mobile streaming client (IRL Pro, Moblin, BELABOX, etc.) will connect to send the bonded stream. Available in `server` and `standalone` modes.
 
+- **`-streamId`** (default: `""`)
+  Optional SRT stream ID. When set, configure the same `streamid` value in the mobile SRTLA URL and pass the flag to both the server and client in server/client mode. Connections with a different stream ID are rejected.
+
 - **`-passphrase`** (default: `""`)  
   Optional passphrase for SRT encryption. In server/client mode, configure the same passphrase on the mobile sender, server, and client. Passphrases must be at least 10 characters long.
 
@@ -173,19 +176,19 @@ Assuming your VPS has the public IP `203.0.113.50`:
 > Open UDP ports `5000` (mobile SRTLA input) and `5001` (client SRT connection) in the VPS firewall.
 
 ```bash
-./go-irl -mode=server -srtla-port=5000 -srt-port=5001 -passphrase=change-this-passphrase
+./go-irl -mode=server -srtla-port=5000 -srt-port=5001 -passphrase=change-this-passphrase -streamId=my-stream
 ```
 
 **On your local machine where OBS is running:**
 
 ```bash
-./go-irl -mode=client -srt-host=203.0.113.50 -srt-port=5001 -passphrase=change-this-passphrase
+./go-irl -mode=client -srt-host=203.0.113.50 -srt-port=5001 -passphrase=change-this-passphrase -streamId=my-stream
 ```
 
 Then configure your mobile app to send SRTLA to:
 
 ```
-srtla://203.0.113.50:5000?mode=caller&passphrase=change-this-passphrase
+srtla://203.0.113.50:5000?mode=caller&passphrase=change-this-passphrase&streamid=my-stream
 ```
 
 The client reconnects automatically if the VPS or mobile stream is temporarily unavailable. If you intentionally run without encryption, omit `-passphrase` everywhere and remove it from the mobile URL.
