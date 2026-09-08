@@ -149,14 +149,18 @@ func findByAddr(addr *net.UDPAddr) (g *Group, c *Conn) {
 	groupsMu.RLock()
 	defer groupsMu.RUnlock()
 	for _, gr := range groups {
+		gr.mu.Lock()
 		for _, conn := range gr.conns {
 			if udpAddrEqual(conn.addr, addr) {
+				gr.mu.Unlock()
 				return gr, conn
 			}
 		}
 		if udpAddrEqual(gr.lastAddr, addr) {
+			gr.mu.Unlock()
 			return gr, nil
 		}
+		gr.mu.Unlock()
 	}
 	return nil, nil
 }
