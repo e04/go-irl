@@ -48,7 +48,10 @@ The `go-irl` application supports several command line options to customize its 
   Port for the SRTLA upstream. This is the port where your mobile streaming client (IRL Pro, Moblin, BELABOX, etc.) will connect to send the bonded stream. Available in `server` and `standalone` modes.
 
 - **`-passphrase`** (default: `""`)  
-  Optional passphrase for SRT encryption. In server/client mode, configure the same passphrase on the mobile sender, server, and client. Passphrases must be at least 10 characters long.
+  Passphrase for SRT encryption. Required in `server` mode (unless `-insecure` is set) and optional otherwise. In server/client mode, configure the same passphrase on the mobile sender, server, and client. Passphrases must be at least 10 characters long.
+
+- **`-insecure`** (default: `false`)  
+  Allow `server` mode to run without a passphrase. **Not recommended:** the VPS is publicly reachable, so without encryption anyone can watch your stream or publish their own stream in its place. Available in `server` mode only.
 
 ## Getting Started
 
@@ -188,7 +191,7 @@ Then configure your mobile app to send SRTLA to:
 srtla://203.0.113.50:5000?mode=caller&passphrase=change-this-passphrase
 ```
 
-The client reconnects automatically if the VPS or mobile stream is temporarily unavailable. If you intentionally run without encryption, omit `-passphrase` everywhere and remove it from the mobile URL.
+The client reconnects automatically if the VPS or mobile stream is temporarily unavailable. Server mode refuses to start without `-passphrase`. If you intentionally run without encryption, start the server with `-insecure`, omit `-passphrase` everywhere, and remove it from the mobile URL. Note that anyone who can reach the VPS can then watch or replace your stream.
 
 ## Acknowledgments
 

@@ -23,6 +23,7 @@ var (
 	wsPort     = flag.Int("ws-port", 8888, "WebSocket server port (client/standalone)")
 	udpPort    = flag.Int("udp-port", 5002, "Port for the UDP down stream (client/standalone)")
 	passphrase = flag.String("passphrase", "", "Passphrase for SRT stream encryption")
+	insecure   = flag.Bool("insecure", false, "Allow server mode to run without a passphrase (anyone can publish or watch the stream)")
 
 	verbose = flag.Bool("verbose", false, "Enable verbose logging in srtla (server/standalone)")
 )
@@ -86,6 +87,16 @@ func main() {
 	}
 }
 
+// validateServerPassphrase rejects an empty passphrase in server mode unless
+// explicitly allowed. The relay is publicly reachable and the downstream stream
+// ID is fixed, so without encryption anyone could watch or hijack the stream.
+func validateServerPassphrase(passphrase string, allowInsecure bool) error {
+	if passphrase == "" && !allowInsecure {
+		return fmt.Errorf("server mode requires -passphrase (use -insecure to run without encryption)")
+	}
+	return nil
+}
+
 func runServerMode() {
 	if *srtPort <= 0 || *srtPort > 65535 {
 		log.Fatalf("ERROR: server mode requires -srt-port (1-65535)")
@@ -99,8 +110,11 @@ func runServerMode() {
 	if *passphrase != "" && len(*passphrase) < 10 {
 		log.Fatalf("ERROR: Passphrase must be at least 10 characters long")
 	}
+	if err := validateServerPassphrase(*passphrase, *insecure); err != nil {
+		log.Fatalf("ERROR: %v", err)
+	}
 	if *passphrase == "" {
-		log.Println("WARNING: No passphrase set. Both SRT legs will be unencrypted.")
+		log.Println("WARNING: -insecure set. Both SRT legs are unencrypted and anyone can publish or watch the stream.")
 	}
 
 	relay := newSRTRelay(*passphrase)
