@@ -22,6 +22,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci && npm run build
         working-directory: frontend
+      - run: npm test
+        working-directory: frontend
       - run: go vet ./...
       - run: go test -race -shuffle=on -count=3 -coverprofile=coverage.out ./...
       - run: go test -run='^$' -fuzz=FuzzSRTPacketParsing -fuzztime=10s .
