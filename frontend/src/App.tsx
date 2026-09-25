@@ -15,8 +15,9 @@ function App() {
   const { messages, isDisconnected } = useWebSocket({
     url: ENDPOINT,
     onConnected: () => {
+      // The online scene is restored by onGoodConnection once enough stats
+      // confirm the link is healthy, not merely on reconnect.
       console.log("connected");
-      window.obsstudio?.setCurrentScene(onlineSceneName);
     },
     onDisconnected: () => {
       console.log("disconnected");

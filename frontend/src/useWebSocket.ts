@@ -10,6 +10,27 @@ const LOW_LOSS_RATE_THRESHOLD = 5;
 const RECONNECT_DELAY = 1000;
 const MESSAGE_INTERVAL = 32;
 
+type ConnectionQuality = "unknown" | "good" | "poor";
+
+function nextConnectionQuality(
+  current: ConnectionQuality,
+  history: number[]
+): ConnectionQuality {
+  if (history.length < LOSS_RATE_HISTORY_SIZE) {
+    return current;
+  }
+  const allHighLoss = history.every(
+    (rate) => rate >= HIGH_LOSS_RATE_THRESHOLD
+  );
+  const allLowLoss = history.every((rate) => rate < LOW_LOSS_RATE_THRESHOLD);
+
+  if (current === "poor") {
+    return allLowLoss ? "good" : "poor";
+  }
+  // Both "unknown" and "good" only drop to "poor" on sustained high loss.
+  return allHighLoss ? "poor" : "good";
+}
+
 export function useWebSocket({
   url,
   onConnected,
@@ -31,7 +52,10 @@ export function useWebSocket({
   const previousConnectionState = useRef<boolean | null>(null);
 
   const lossRateHistory = useRef<number[]>([]);
-  const connectionQualityRef = useRef<"good" | "poor">("good");
+  // "unknown" until enough samples arrive after (re)connecting. Scene
+  // switching to online only happens via a transition to "good", so a
+  // reconnect with a still-lossy link does not flip back to the online scene.
+  const connectionQualityRef = useRef<ConnectionQuality>("unknown");
 
   const connect = () => {
     if (socket.current) {
@@ -42,47 +66,53 @@ export function useWebSocket({
     socket.current.addEventListener("close", handleClose);
   };
 
+  const updateConnectionQuality = (lossRate: number) => {
+    lossRateHistory.current.push(lossRate);
+    if (lossRateHistory.current.length > LOSS_RATE_HISTORY_SIZE) {
+      lossRateHistory.current.shift();
+    }
+
+    const next = nextConnectionQuality(
+      connectionQualityRef.current,
+      lossRateHistory.current
+    );
+    if (next === connectionQualityRef.current) {
+      return;
+    }
+    connectionQualityRef.current = next;
+    if (next === "poor") {
+      onPoorConnection?.();
+    } else if (next === "good") {
+      onGoodConnection?.();
+    }
+  };
+
   const handleMessage = (event: MessageEvent) => {
+    let data: unknown;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+    const parsed = WebSocketMessageSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error(parsed.error.errors);
+      return;
+    }
+    if (parsed.data.type !== "reader") {
+      // Ignore non-reader messages
+      return;
+    }
+
+    const lossRate = parsed.data.stats?.Instantaneous?.PktRecvLossRate;
+    if (typeof lossRate === "number") {
+      updateConnectionQuality(lossRate);
+    }
+
+    lastReceivedTime.current = Date.now();
+
     setMessages((prev) => {
-      const data = JSON.parse(event.data);
-      const parsed = WebSocketMessageSchema.safeParse(data);
-      if (!parsed.success) {
-        console.error(parsed.error.errors);
-        return prev;
-      }
-      if (parsed.data.type !== "reader") {
-        // Ignore non-reader messages
-        return prev;
-      }
-
-      const lossRate = parsed.data.stats?.Instantaneous?.PktRecvLossRate;
-      if (typeof lossRate === "number") {
-        lossRateHistory.current.push(lossRate);
-        if (lossRateHistory.current.length > LOSS_RATE_HISTORY_SIZE) {
-          lossRateHistory.current.shift();
-        }
-
-        if (lossRateHistory.current.length === LOSS_RATE_HISTORY_SIZE) {
-          const allHighLoss = lossRateHistory.current.every(
-            (rate) => rate >= HIGH_LOSS_RATE_THRESHOLD
-          );
-          const allLowLoss = lossRateHistory.current.every(
-            (rate) => rate < LOW_LOSS_RATE_THRESHOLD
-          );
-
-          if (connectionQualityRef.current === "good" && allHighLoss) {
-            connectionQualityRef.current = "poor";
-            onPoorConnection?.();
-          } else if (connectionQualityRef.current === "poor" && allLowLoss) {
-            connectionQualityRef.current = "good";
-            onGoodConnection?.();
-          }
-        }
-      }
-
-      const now = Date.now();
-      lastReceivedTime.current = now;
-
       const next = [...prev, parsed.data];
       if (next.length > MAX_MESSAGES) next.shift();
       return next;
@@ -127,6 +157,9 @@ export function useWebSocket({
         previousConnectionState.current === false &&
         currentDisconnectedState === true
       ) {
+        // Stale samples must not decide the scene after reconnecting.
+        lossRateHistory.current = [];
+        connectionQualityRef.current = "unknown";
         onDisconnected?.();
       } else if (
         previousConnectionState.current === true &&
