@@ -34,9 +34,6 @@ function App() {
   });
 
   const data = messages.map((item) => {
-    if (!item) {
-      return null;
-    }
     return {
       timepointUnixMs: new Date(item.timestamp).getTime(),
       bitrate: item.stats.Instantaneous.MbpsRecvRate,

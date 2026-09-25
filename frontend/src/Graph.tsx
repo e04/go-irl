@@ -10,116 +10,139 @@ type DataItem = {
 
 const DURATION = 1000 * 60;
 
+const baseOption: echarts.EChartsOption = {
+  backgroundColor: "rgba(0, 0, 0, 0.9)",
+  animation: false,
+  tooltip: { show: false },
+  legend: {
+    show: false,
+  },
+  grid: {
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 30,
+  },
+  xAxis: {
+    type: "time",
+    axisLabel: { show: false },
+    axisLine: { lineStyle: { color: "#757575" } },
+  },
+  yAxis: [
+    {
+      type: "value",
+      name: "Bitrate",
+      position: "right",
+      min: 0,
+      max: 10,
+      show: false,
+    },
+    {
+      type: "log",
+      name: "RTT",
+      position: "right",
+      min: 20,
+      max: 2000,
+      show: false,
+    },
+    {
+      type: "value",
+      name: "loss",
+      position: "left",
+      min: 0,
+      max: 1,
+      show: false,
+    },
+  ],
+  series: [
+    {
+      id: "bitrate",
+      name: "Bitrate(Mbps)",
+      type: "scatter",
+      symbolSize: 5,
+      yAxisIndex: 0,
+      itemStyle: {
+        color: "#42A5F5",
+      },
+    },
+    {
+      id: "rtt",
+      name: "RTT(ms)",
+      type: "scatter",
+      symbolSize: 5,
+      yAxisIndex: 1,
+      itemStyle: {
+        color: "#66BB6A",
+      },
+    },
+    {
+      id: "loss",
+      name: "Loss(%)",
+      type: "scatter",
+      yAxisIndex: 2,
+      stack: "bytes",
+      itemStyle: {
+        color: "#FFB74D",
+      },
+      symbolSize: 5,
+    },
+  ],
+};
+
 export const Graph = ({
   data,
   isDisconnected,
 }: {
-  data: (DataItem | null)[];
+  data: DataItem[];
   isDisconnected: boolean;
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const nonNullData = data.filter((d) => d != null);
-  const lastItem = nonNullData[nonNullData.length - 1];
+  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const lastItem = data[data.length - 1];
 
+  // Create the chart once; re-initializing on every update is expensive in
+  // the OBS browser source.
   useEffect(() => {
     if (!chartRef.current) return;
     const chart = echarts.init(chartRef.current);
+    chart.setOption(baseOption);
+    chartInstance.current = chart;
 
-    const option = {
-      backgroundColor: "rgba(0, 0, 0, 0.9)",
-      animation: false,
-      tooltip: { show: false },
-      legend: {
-        show: false,
-      },
-      grid: {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 30,
-      },
+    const handleResize = () => chart.resize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      chart.dispose();
+      chartInstance.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    chartInstance.current?.setOption({
       xAxis: {
-        type: "time",
-        axisLabel: { show: false },
-        axisLine: { lineStyle: { color: "#757575" } },
-        min: Date.now() - DURATION,
-        max: Date.now(),
+        min: now - DURATION,
+        max: now,
       },
-      yAxis: [
-        {
-          type: "value",
-          name: "Bitrate",
-          position: "right",
-          min: 0,
-          max: 10,
-          show: false,
-        },
-        {
-          type: "log",
-          name: "RTT",
-          position: "right",
-          min: 20,
-          max: 2000,
-          show: false,
-        },
-        {
-          type: "value",
-          name: "loss",
-          position: "left",
-          min: 0,
-          max: 1,
-          show: false,
-        },
-      ],
       series: [
         {
-          name: "dummy",
-          type: "scatter",
-          data: data.map((d) => [d?.timepointUnixMs ?? 0, 0]),
-          symbolSize: 0,
+          id: "bitrate",
+          data: data.map((d) => [d.timepointUnixMs, d.bitrate]),
         },
         {
-          name: "Bitrate(Mbps)",
-          type: "scatter",
-          symbolSize: 5,
-          yAxisIndex: 0,
-          data: nonNullData.map((d) => [d.timepointUnixMs, d.bitrate]),
-          itemStyle: {
-            color: "#42A5F5",
-          },
+          id: "rtt",
+          data: data.map((d) => [d.timepointUnixMs, d.rtt < 20 ? 20 : d.rtt]),
         },
         {
-          name: "RTT(ms)",
-          type: "scatter",
-          symbolSize: 5,
-          yAxisIndex: 1,
-          data: nonNullData.map((d) => [
-            d.timepointUnixMs,
-            d.rtt < 20 ? 20 : d.rtt,
-          ]),
-          itemStyle: {
-            color: "#66BB6A",
-          },
-        },
-        {
-          name: "Loss(%)",
-          type: "scatter",
-          yAxisIndex: 2,
-          stack: "bytes",
-          data: nonNullData.map((d) => [
+          id: "loss",
+          data: data.map((d) => [
             d.timepointUnixMs,
             d.loss === 0 ? -Infinity : d.loss,
           ]),
-          itemStyle: {
-            color: "#FFB74D",
-          },
-          symbolSize: 5,
         },
       ],
-    };
-
-    chart.setOption(option);
-    return () => chart.dispose();
+    });
   }, [data]);
 
   return (
@@ -146,9 +169,9 @@ export const Graph = ({
           left: 16,
           backgroundColor: isDisconnected
             ? "#CFD8DC"
-            : (nonNullData[nonNullData.length - 1]?.loss ?? 0) > 0.2
+            : (lastItem?.loss ?? 0) > 0.2
             ? "#E57373"
-            : (nonNullData[nonNullData.length - 1]?.loss ?? 0) > 0.05
+            : (lastItem?.loss ?? 0) > 0.05
             ? "#FFC107"
             : "#8BC34A",
           borderRadius: 12,

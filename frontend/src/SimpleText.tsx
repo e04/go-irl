@@ -4,13 +4,12 @@ interface SimpleTextProps {
     bitrate: number;
     rtt: number;
     loss: number;
-  } | null>;
+  }>;
   isDisconnected: boolean;
 }
 
 export function SimpleText({ data, isDisconnected }: SimpleTextProps) {
-  const nonNullData = data.filter((d) => d != null);
-  const lastItem = nonNullData[nonNullData.length - 1];
+  const lastItem = data[data.length - 1];
 
   return (
     <div
@@ -29,9 +28,9 @@ export function SimpleText({ data, isDisconnected }: SimpleTextProps) {
         style={{
           backgroundColor: isDisconnected
             ? "#CFD8DC"
-            : (nonNullData[nonNullData.length - 1]?.loss ?? 0) > 0.2
+            : (lastItem?.loss ?? 0) > 0.2
             ? "#E57373"
-            : (nonNullData[nonNullData.length - 1]?.loss ?? 0) > 0.05
+            : (lastItem?.loss ?? 0) > 0.05
             ? "#FFC107"
             : "#8BC34A",
           borderRadius: 12,

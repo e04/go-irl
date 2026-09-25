@@ -2,13 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { WebSocketMessageSchema } from "./types";
 import { z } from "zod";
 
-const MAX_MESSAGES = 3000;
+// Stats arrive about once per second; keep a bit more than the graph window.
+const MAX_MESSAGES = 120;
 const CONNECTION_WAIT_TIME = 5000;
 const LOSS_RATE_HISTORY_SIZE = 3;
 const HIGH_LOSS_RATE_THRESHOLD = 20;
 const LOW_LOSS_RATE_THRESHOLD = 5;
 const RECONNECT_DELAY = 1000;
-const MESSAGE_INTERVAL = 32;
+// Re-render periodically so disconnection is detected even without messages.
+const TICK_INTERVAL = 500;
 
 type ConnectionQuality = "unknown" | "good" | "poor";
 
@@ -45,8 +47,9 @@ export function useWebSocket({
   onGoodConnection?: () => void;
 }) {
   const [messages, setMessages] = useState<
-    (z.infer<typeof WebSocketMessageSchema> | null)[]
-  >(Array.from({ length: MAX_MESSAGES }, () => null));
+    z.infer<typeof WebSocketMessageSchema>[]
+  >([]);
+  const [, setTick] = useState(0);
   const socket = useRef<WebSocket | null>(null);
   const lastReceivedTime = useRef<number>(0);
   const previousConnectionState = useRef<boolean | null>(null);
@@ -128,12 +131,8 @@ export function useWebSocket({
 
   useEffect(() => {
     const intervalId = setInterval(() => {
-      setMessages((prev) => {
-        const next = [...prev, null];
-        if (next.length > MAX_MESSAGES) next.shift();
-        return next;
-      });
-    }, MESSAGE_INTERVAL);
+      setTick((tick) => tick + 1);
+    }, TICK_INTERVAL);
 
     return () => clearInterval(intervalId);
   }, []);
