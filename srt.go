@@ -190,14 +190,14 @@ func handleWebSocket(hub *hub, w http.ResponseWriter, r *http.Request) {
 
 // runSrtProxy forwards the SRT stream at from to the UDP address to. When
 // wsPort is set, statistics are broadcast over WebSocket and passed to
-// onStats. Startup errors are returned; later failures are sent on the
-// returned channel.
-func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onStats func([]byte)) (<-chan error, error) {
+// onStats. Startup errors are returned; after that the proxy keeps running,
+// reconnecting the SRT reader and dropping packets the UDP output rejects.
+func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onStats func([]byte)) error {
 	var hub *hub
 	if wsPort > 0 {
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", wsPort))
 		if err != nil {
-			return nil, fmt.Errorf("failed to start WebSocket server: %w", err)
+			return fmt.Errorf("failed to start WebSocket server: %w", err)
 		}
 
 		hub = newHub(onStats)
@@ -220,17 +220,16 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onSta
 		go runStatsTelemetry(telemetryFrom, hub)
 	}
 
-	doneChan := make(chan error, 1)
-
 	w, err := openUDPWriter(to)
 	if err != nil {
-		return nil, fmt.Errorf("to: %w", err)
+		return fmt.Errorf("to: %w", err)
 	}
 
 	go func() {
 		defer w.Close()
 
 		buffer := make([]byte, 2048)
+		writeFailing := false
 
 		s := &stats{
 			interval: time.Second,
@@ -261,17 +260,24 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onSta
 					break
 				}
 
+				// UDP output is best effort: while nothing listens on the
+				// port (e.g. OBS not running yet) writes fail with
+				// "connection refused", so drop the packet and carry on.
 				if _, err := w.Write(buffer[:n]); err != nil {
-					r.Close()
-					doneChan <- fmt.Errorf("write: %w", err)
-					return
+					if !writeFailing {
+						log.Printf("UDP output write error: %v. Dropping packets until it recovers...", err)
+						writeFailing = true
+					}
+				} else if writeFailing {
+					log.Println("UDP output recovered.")
+					writeFailing = false
 				}
 				s.reportIfDue()
 			}
 		}
 	}()
 
-	return doneChan, nil
+	return nil
 }
 
 func openSrtStream(addr string) (io.ReadCloser, error) {

@@ -174,11 +174,10 @@ func runClientMode(ctx context.Context, cfg config, hooks runHooks) error {
 	if err := startBrowserSource(cfg.BSPort, errCh); err != nil {
 		return err
 	}
-	srtDoneChan, err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, telemetryAddr, hooks.onStats)
-	if err != nil {
+	if err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, telemetryAddr, hooks.onStats); err != nil {
 		return err
 	}
-	return waitForEither(ctx, srtDoneChan, errCh)
+	return waitForEither(ctx, errCh)
 }
 
 func runStandaloneMode(ctx context.Context, cfg config, hooks runHooks) error {
@@ -196,20 +195,14 @@ func runStandaloneMode(ctx context.Context, cfg config, hooks runHooks) error {
 	if err := startSrtla(uint(cfg.SRTLAPort), "127.0.0.1", uint(internalSrtPort), cfg.Verbose); err != nil {
 		return err
 	}
-	srtDoneChan, err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, "", hooks.onStats)
-	if err != nil {
+	if err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, "", hooks.onStats); err != nil {
 		return err
 	}
-	return waitForEither(ctx, srtDoneChan, errCh)
+	return waitForEither(ctx, errCh)
 }
 
-func waitForEither(ctx context.Context, srtDoneChan <-chan error, errCh <-chan error) error {
+func waitForEither(ctx context.Context, errCh <-chan error) error {
 	select {
-	case err := <-srtDoneChan:
-		if err != nil {
-			return fmt.Errorf("SRT proxy exited: %w", err)
-		}
-		log.Println("SRT proxy exited gracefully.")
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
