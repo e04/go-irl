@@ -32,3 +32,54 @@ jobs:
         with:
           name: coverage-${{ matrix.os }}
           path: coverage.out
+  e2e:
+    # srtla_send is Linux-only; the suite binds links to 127.0.0.x, which only
+    # Linux routes out of the box.
+    runs-on: ubuntu-latest
+    env:
+      # Keep in sync with SRTLA_REF in e2e/Dockerfile.
+      SRTLA_REF: b8359bc80ce99ac4fc8f603cfa455cdd0a0a4241
+      E2E_STATS_DIR: ${{ github.workspace }}/e2e/.stats
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - id: srtla-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/srtla-bin
+          key: srtla-send-${{ runner.os }}-${{ env.SRTLA_REF }}
+      - name: Build srtla_send
+        if: steps.srtla-cache.outputs.cache-hit != 'true'
+        # Debug build: sender.cpp reads the clock inside assert(), so NDEBUG
+        # builds never register a link.
+        run: |
+          git clone https://github.com/irlserver/srtla.git "$RUNNER_TEMP/srtla"
+          cd "$RUNNER_TEMP/srtla"
+          git checkout -q "$SRTLA_REF"
+          git submodule update --init --depth 1
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --target srtla_send -j"$(nproc)"
+          mkdir -p ~/srtla-bin
+          install build/srtla_send ~/srtla-bin/
+      - run: go vet -tags e2e ./e2e
+      - run: SRTLA_SEND="$HOME/srtla-bin/srtla_send" go test -tags e2e -count=1 -v ./e2e
+        env:
+          E2E_RACE: '1'
+      - name: Replay captured statistics through the Browser Source
+        run: npx vitest run e2e
+        working-directory: frontend
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-stats
+          path: e2e/.stats
+          if-no-files-found: ignore

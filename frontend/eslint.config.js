@@ -25,4 +25,11 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Replays files captured by the Go E2E suite, so it runs under Node.
+    files: ['e2e/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+  },
 )

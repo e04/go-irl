@@ -38,3 +38,6 @@ obs-srt-bridge
 
 .DS_Store
 
+
+# E2E statistics captured for the frontend replay test
+e2e/.stats
