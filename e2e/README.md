@@ -46,3 +46,17 @@ SRTLA_SEND=/path/to/srtla_send E2E_STATS_DIR=$PWD/e2e/.stats go test -tags e2e -
 Build `srtla_send` with `-DCMAKE_BUILD_TYPE=Debug`: it reads the clock inside
 `assert()`, so a release build never registers a link. The pinned srtla
 commit is `SRTLA_REF` in `e2e/Dockerfile` and `.github/workflows/test.yml`.
+
+## Browser Source in a real browser
+
+`frontend/e2e/browser` runs the built Browser Source (`frontend/dist/index.html`)
+in Chromium with Playwright. The WebSocket and clock are mocked, so it needs
+neither go-irl nor `srtla_send`: it covers the stats display, status dot,
+scene switching (`window.obsstudio`), the 5s disconnection timeout,
+reconnecting, URL parameters and the `graph`/`none` display types.
+
+```bash
+cd frontend
+npx playwright install chromium   # first time only
+npm run build && npm run test:e2e
+```

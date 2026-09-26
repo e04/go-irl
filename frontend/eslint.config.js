@@ -32,4 +32,14 @@ export default tseslint.config(
       globals: { ...globals.browser, ...globals.node },
     },
   },
+  {
+    // Playwright fixtures take a `use` callback, which is not the React hook.
+    files: ['e2e/browser/**/*.ts', 'playwright.config.ts'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
 )
