@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -130,5 +131,45 @@ func TestDashboardMarksStaleStream(t *testing.T) {
 	d = d.applyPoll(pollMsg{at: start.Add(10 * time.Second)})
 	if view := d.View(); !strings.Contains(view, "waiting for stream") {
 		t.Fatalf("stale stream still shown as live:\n%s", view)
+	}
+}
+
+func TestDashboardShowsUDPOutputStatus(t *testing.T) {
+	start := time.Now()
+	d := newDashboardModel(defaultTestConfig(), start).resize(100, 40)
+	if view := d.View(); !strings.Contains(view, "idle") {
+		t.Fatalf("output not idle before any write:\n%s", view)
+	}
+
+	var out udpOutput
+	out.record(start, nil)
+	out.record(start.Add(10*time.Millisecond), errors.New("write udp 127.0.0.1:1->127.0.0.1:5002: write: connection refused"))
+	out.record(start.Add(20*time.Millisecond), nil) // flapping success does not mean recovery
+	d = d.applyPoll(pollMsg{at: start.Add(time.Second), output: out.snapshot()})
+	if view := d.View(); !strings.Contains(view, "no listener") {
+		t.Fatalf("refused output not shown:\n%s", view)
+	}
+
+	out.record(start.Add(3*time.Second), nil)
+	d = d.applyPoll(pollMsg{at: start.Add(3 * time.Second), output: out.snapshot()})
+	if view := d.View(); !strings.Contains(view, "sending") {
+		t.Fatalf("recovered output not shown:\n%s", view)
+	}
+}
+
+func TestDashboardShowsSRTLALinkRates(t *testing.T) {
+	start := time.Now()
+	d := newDashboardModel(defaultTestConfig(), start).resize(100, 40)
+	snap := func(a, b uint64) []srtlaGroupInfo {
+		return []srtlaGroupInfo{{Conns: []srtlaConnInfo{
+			{Addr: "203.0.113.5:40123", LastRcvd: start, RxBytes: a},
+			{Addr: "198.51.100.7:51022", LastRcvd: start, RxBytes: b},
+		}}}
+	}
+	d = d.applyPoll(pollMsg{at: start, groups: snap(0, 0)})
+	d = d.applyPoll(pollMsg{at: start.Add(time.Second), groups: snap(400_000, 225_000)})
+	view := d.View()
+	if !strings.Contains(view, "3.2 Mbps") || !strings.Contains(view, "1.8 Mbps") {
+		t.Fatalf("link rates not shown:\n%s", view)
 	}
 }

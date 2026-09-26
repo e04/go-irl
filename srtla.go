@@ -80,6 +80,7 @@ func udpAddrEqual(a, b *net.UDPAddr) bool {
 type Conn struct {
 	addr     *net.UDPAddr
 	lastRcvd atomic.Int64            // UnixNano
+	rxBytes  atomic.Uint64           // bytes received on this link, for display
 	recvIdx  int                     // next slot in recvLog
 	recvLog  [RecvACKInterval]uint32 // SRT sequence numbers for SRTLA ACK
 }
@@ -360,6 +361,7 @@ func handleSRTLAIncoming(pkt []byte, addr *net.UDPAddr) {
 	}
 
 	c.lastRcvd.Store(now.UnixNano())
+	c.rxBytes.Add(uint64(len(pkt)))
 
 	if isSRTLAKeepalive(pkt) {
 		// Echo back the keepalive.  Do NOT update lastAddr for keepalives
@@ -617,6 +619,7 @@ func startSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) erro
 type srtlaConnInfo struct {
 	Addr     string
 	LastRcvd time.Time
+	RxBytes  uint64 // total bytes received on the link
 }
 
 type srtlaGroupInfo struct {
@@ -639,6 +642,7 @@ func srtlaSnapshot() []srtlaGroupInfo {
 			info.Conns = append(info.Conns, srtlaConnInfo{
 				Addr:     c.addr.String(),
 				LastRcvd: time.Unix(0, c.lastRcvd.Load()),
+				RxBytes:  c.rxBytes.Load(),
 			})
 		}
 		g.mu.Unlock()

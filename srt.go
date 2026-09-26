@@ -192,7 +192,8 @@ func handleWebSocket(hub *hub, w http.ResponseWriter, r *http.Request) {
 // wsPort is set, statistics are broadcast over WebSocket and passed to
 // onStats. Startup errors are returned; after that the proxy keeps running,
 // reconnecting the SRT reader and dropping packets the UDP output rejects.
-func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onStats func([]byte)) error {
+// Write results are recorded in out (if non-nil) instead of being logged.
+func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onStats func([]byte), out *udpOutput) error {
 	var hub *hub
 	if wsPort > 0 {
 		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", wsPort))
@@ -229,7 +230,6 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onSta
 		defer w.Close()
 
 		buffer := make([]byte, 2048)
-		writeFailing := false
 
 		s := &stats{
 			interval: time.Second,
@@ -261,23 +261,56 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onSta
 				}
 
 				// UDP output is best effort: while nothing listens on the
-				// port (e.g. OBS not running yet) writes fail with
+				// port (e.g. the player is not running yet) writes fail with
 				// "connection refused", so drop the packet and carry on.
-				if _, err := w.Write(buffer[:n]); err != nil {
-					if !writeFailing {
-						log.Printf("UDP output write error: %v. Dropping packets until it recovers...", err)
-						writeFailing = true
-					}
-				} else if writeFailing {
-					log.Println("UDP output recovered.")
-					writeFailing = false
-				}
+				// The state is shown in the TUI rather than logged.
+				_, err = w.Write(buffer[:n])
+				out.record(time.Now(), err)
 				s.reportIfDue()
 			}
 		}
 	}()
 
 	return nil
+}
+
+// udpOutput tracks the results of writes to the UDP downstream.
+// A nil *udpOutput ignores records.
+type udpOutput struct {
+	mu   sync.Mutex
+	snap udpOutputSnapshot
+}
+
+type udpOutputSnapshot struct {
+	LastOK  time.Time // last successful write
+	LastErr time.Time // last failed write
+	Err     string    // error of the last failed write
+}
+
+// udpOutputErrorHold is how long a write error keeps the output marked as
+// failing. With nothing listening, writes alternate between success and
+// "connection refused" (the ICMP error surfaces on the next write), so a single
+// successful write does not mean the output recovered.
+const udpOutputErrorHold = 2 * time.Second
+
+func (o *udpOutput) record(at time.Time, err error) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if err != nil {
+		o.snap.LastErr = at
+		o.snap.Err = err.Error()
+	} else {
+		o.snap.LastOK = at
+	}
+}
+
+func (o *udpOutput) snapshot() udpOutputSnapshot {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.snap
 }
 
 func openSrtStream(addr string) (io.ReadCloser, error) {

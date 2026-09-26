@@ -115,6 +115,7 @@ func runCLI(cfg config) {
 type runHooks struct {
 	onStats func([]byte)    // statistics broadcast to the Browser Source (client/standalone)
 	onRelay func(*srtRelay) // called once the relay is listening (server)
+	output  *udpOutput      // records UDP downstream writes (client/standalone)
 }
 
 // runMode starts the components for cfg's mode and blocks until ctx is done
@@ -174,7 +175,7 @@ func runClientMode(ctx context.Context, cfg config, hooks runHooks) error {
 	if err := startBrowserSource(cfg.BSPort, errCh); err != nil {
 		return err
 	}
-	if err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, telemetryAddr, hooks.onStats); err != nil {
+	if err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, telemetryAddr, hooks.onStats, hooks.output); err != nil {
 		return err
 	}
 	return waitForEither(ctx, errCh)
@@ -195,7 +196,7 @@ func runStandaloneMode(ctx context.Context, cfg config, hooks runHooks) error {
 	if err := startSrtla(uint(cfg.SRTLAPort), "127.0.0.1", uint(internalSrtPort), cfg.Verbose); err != nil {
 		return err
 	}
-	if err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, "", hooks.onStats); err != nil {
+	if err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, "", hooks.onStats, hooks.output); err != nil {
 		return err
 	}
 	return waitForEither(ctx, errCh)

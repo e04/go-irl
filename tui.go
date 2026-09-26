@@ -62,6 +62,7 @@ func (s *logSink) snapshot() []string {
 type tuiBridge struct {
 	events chan tea.Msg
 	relay  atomic.Pointer[srtRelay]
+	output udpOutput
 }
 
 func newTUIBridge() *tuiBridge {
@@ -96,6 +97,7 @@ func (b *tuiBridge) hooks() runHooks {
 			}
 		},
 		onRelay: func(r *srtRelay) { b.relay.Store(r) },
+		output:  &b.output,
 	}
 }
 
@@ -131,12 +133,13 @@ type (
 		at     time.Time
 		groups []srtlaGroupInfo
 		relay  *relaySnapshot
+		output udpOutputSnapshot
 	}
 )
 
 func pollCmd(b *tuiBridge) tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-		msg := pollMsg{at: t, groups: srtlaSnapshot()}
+		msg := pollMsg{at: t, groups: srtlaSnapshot(), output: b.output.snapshot()}
 		if r := b.relay.Load(); r != nil {
 			snap := r.snapshot()
 			msg.relay = &snap

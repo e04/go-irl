@@ -14,9 +14,9 @@ import (
 var setupModes = []struct {
 	name, desc string
 }{
-	{"standalone", "SRTLA receiver and OBS output on this machine (needs UDP port forwarding)"},
+	{"standalone", "SRTLA receiver and UDP downstream on this machine (needs UDP port forwarding)"},
 	{"server", "Run on a VPS: receive SRTLA and relay SRT to the client"},
-	{"client", "Run next to OBS: connect to the VPS, no inbound port needed"},
+	{"client", "Run on your local machine: connect to the VPS, no inbound port needed"},
 }
 
 type fieldKind int
@@ -73,7 +73,7 @@ func newSetupModel(cfg config) setupModel {
 			{flag: "srt-host", label: "VPS host", kind: fieldText, modes: []string{"client"}, input: newInput(cfg.SRTHost, 253)},
 			{flag: "srt-port", label: "SRT port", kind: fieldPort, modes: []string{"server", "client"}, input: port(cfg.SRTPort)},
 			{flag: "srtla-port", label: "SRTLA port", kind: fieldPort, modes: []string{"server", "standalone"}, input: port(cfg.SRTLAPort)},
-			{flag: "udp-port", label: "OBS UDP port", kind: fieldPort, modes: []string{"client", "standalone"}, input: port(cfg.UDPPort)},
+			{flag: "udp-port", label: "UDP downstream port", kind: fieldPort, modes: []string{"client", "standalone"}, input: port(cfg.UDPPort)},
 			{flag: "bs-port", label: "Browser Source port", kind: fieldPort, modes: []string{"client", "standalone"}, input: port(cfg.BSPort)},
 			{flag: "ws-port", label: "WebSocket port", kind: fieldPort, modes: []string{"client", "standalone"}, input: port(cfg.WSPort)},
 			{flag: "passphrase", label: "Passphrase", kind: fieldSecret, modes: []string{"server", "client", "standalone"}, input: pass},

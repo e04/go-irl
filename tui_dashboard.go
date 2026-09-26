@@ -56,7 +56,13 @@ type dashboardModel struct {
 
 	samples []streamSample
 	groups  []srtlaGroupInfo
-	relay   *relaySnapshot
+	// linkRates holds each SRTLA link's receive rate in Mbps, computed from
+	// the byte counters of the previous poll (prevGroups at prevPoll).
+	linkRates  map[string]float64
+	prevGroups []srtlaGroupInfo
+	prevPoll   time.Time
+	relay      *relaySnapshot
+	output     udpOutputSnapshot
 
 	logs     viewport.Model
 	logLines []string
@@ -101,8 +107,11 @@ func (d dashboardModel) addSample(s streamSample) dashboardModel {
 
 func (d dashboardModel) applyPoll(msg pollMsg) dashboardModel {
 	d.now = msg.at
+	d.linkRates = linkRates(d.prevGroups, msg.groups, msg.at.Sub(d.prevPoll))
+	d.prevGroups, d.prevPoll = msg.groups, msg.at
 	d.groups = msg.groups
 	d.relay = msg.relay
+	d.output = msg.output
 	// In server mode the relay's publisher is the upstream leg; sample it the
 	// same way the client does over the telemetry channel.
 	if msg.relay != nil && msg.relay.Stats != nil {
@@ -194,18 +203,41 @@ func (d dashboardModel) endpointsPanel(width int) string {
 	case "client":
 		rows = append(rows,
 			kv(width, "VPS", fmt.Sprintf("%s:%d", c.SRTHost, c.SRTPort)),
-			kv(width, "OBS Media Source", c.udpOutputURL()+dimStyle.Render("  (mpegts)")),
-			kv(width, "OBS Browser Source", c.browserSourceURL()),
+			kv(width, "UDP downstream", c.udpOutputURL()+dimStyle.Render("  (mpegts)")),
+			kv(width, "Browser Source", c.browserSourceURL()),
 		)
 	default:
 		rows = append(rows,
 			kv(width, "SRTLA input (phone)", fmt.Sprintf("UDP :%d", c.SRTLAPort)),
-			kv(width, "OBS Media Source", c.udpOutputURL()+dimStyle.Render("  (mpegts)")),
-			kv(width, "OBS Browser Source", c.browserSourceURL()),
+			kv(width, "UDP downstream", c.udpOutputURL()+dimStyle.Render("  (mpegts)")),
+			kv(width, "Browser Source", c.browserSourceURL()),
 		)
 	}
 	rows = append(rows, kv(width, "Command", dimStyle.Render(c.commandLine())))
 	return boxTitleStyle.Render("Endpoints") + "\n" + strings.Join(rows, "\n")
+}
+
+// linkRates returns the receive rate in Mbps of each link present in both
+// snapshots, keyed by address. Links first seen in cur have no rate yet.
+func linkRates(prev, cur []srtlaGroupInfo, elapsed time.Duration) map[string]float64 {
+	if elapsed <= 0 {
+		return nil
+	}
+	before := map[string]uint64{}
+	for _, g := range prev {
+		for _, c := range g.Conns {
+			before[c.Addr] = c.RxBytes
+		}
+	}
+	rates := map[string]float64{}
+	for _, g := range cur {
+		for _, c := range g.Conns {
+			if b, ok := before[c.Addr]; ok && c.RxBytes >= b {
+				rates[c.Addr] = float64(c.RxBytes-b) * 8 / elapsed.Seconds() / 1e6
+			}
+		}
+	}
+	return rates
 }
 
 func lossStyle(loss float64) lipgloss.Style {
@@ -266,12 +298,22 @@ func (d dashboardModel) streamPanel(width int) string {
 		rows = append(rows, kv(width, "Bitrate (60s)", sparkStyle.Render(sparkline(bitrates))))
 	}
 
+	if mode != "server" {
+		rows = append(rows, kv(width, "UDP downstream", d.outputStatus()))
+	}
+
 	if mode == "server" && d.relay != nil {
 		rows = append(rows, kv(width, "Clients", fmt.Sprintf("%d stream · %d stats", d.relay.Subscribers, d.relay.StatsClients)))
 	}
 
 	if mode != "client" {
 		rows = append(rows, "", boxTitleStyle.Render("SRTLA links"))
+		addrWidth := 0
+		for _, g := range d.groups {
+			for _, c := range g.Conns {
+				addrWidth = max(addrWidth, len(c.Addr))
+			}
+		}
 		n := 0
 		for _, g := range d.groups {
 			for _, c := range g.Conns {
@@ -280,7 +322,16 @@ func (d dashboardModel) streamPanel(width int) string {
 				if ago > 2*time.Second {
 					style = warnStyle
 				}
-				rows = append(rows, style.Render("●")+" "+fmt.Sprintf("%-40s", c.Addr)+dimStyle.Render(fmt.Sprintf("%.1fs ago", ago.Seconds())))
+				rate := "     -    "
+				if r, ok := d.linkRates[c.Addr]; ok {
+					rate = fmt.Sprintf("%5.1f Mbps", r)
+				}
+				row := style.Render("●") + " " + fmt.Sprintf("%-*s", addrWidth+2, c.Addr) + valueStyle.Render(rate)
+				// Drop the last-received age rather than wrap the row.
+				if since := "  " + dimStyle.Render(fmt.Sprintf("%.1fs ago", ago.Seconds())); lipgloss.Width(row+since) <= width {
+					row += since
+				}
+				rows = append(rows, row)
 				n++
 			}
 		}
@@ -290,6 +341,25 @@ func (d dashboardModel) streamPanel(width int) string {
 	}
 
 	return boxTitleStyle.Render("Stream") + "\n" + strings.Join(rows, "\n")
+}
+
+// outputStatus describes the UDP downstream output. UDP has no connection, so
+// "sending" only means writes succeed; a refused write means nothing is
+// listening on the port (e.g. the player is not running yet).
+func (d dashboardModel) outputStatus() string {
+	o := d.output
+	switch {
+	case !o.LastErr.IsZero() && d.now.Sub(o.LastErr) < udpOutputErrorHold:
+		msg := "✗ no listener"
+		if !strings.Contains(o.Err, "connection refused") {
+			msg = "✗ " + o.Err
+		}
+		return badStyle.Render(msg) + dimStyle.Render("  (dropping packets)")
+	case !o.LastOK.IsZero() && d.now.Sub(o.LastOK) < staleAfter:
+		return goodStyle.Render("● sending")
+	default:
+		return dimStyle.Render("○ idle")
+	}
 }
 
 func (d dashboardModel) panels() string {
