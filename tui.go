@@ -15,6 +15,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	srt "github.com/datarhei/gosrt"
 )
 
 const maxLogLines = 500
@@ -101,27 +102,48 @@ func (b *tuiBridge) hooks() runHooks {
 	}
 }
 
-// streamSample holds the values the Browser Source overlay shows.
+// streamSample holds one statistics report of the upstream SRT leg.
 type streamSample struct {
 	At      time.Time
 	Bitrate float64 // Mbps
 	RTT     float64 // ms
-	Loss    float64 // percent
+	// Loss is the share of received data that had to be retransmitted, the
+	// value gosrt reports as PktRecvLossRate and the Browser Source shows.
+	Loss float64 // percent
+
+	BufferMs  uint64 // span of received packets waiting for playout
+	LatencyMs uint64 // configured SRT latency (TSBPD delay)
+
+	// Counters accumulated over the connection; the dashboard diffs
+	// consecutive samples to get per-interval values.
+	PktRecv    uint64
+	PktRetrans uint64
+	PktLate    uint64 // packets that arrived after their playout time
 }
 
-// parseStreamSample extracts the displayed values from a statistics message,
-// matching the Browser Source (frontend/src/App.tsx).
+func sampleFromStats(at time.Time, st *srt.Statistics) streamSample {
+	return streamSample{
+		At:         at,
+		Bitrate:    st.Instantaneous.MbpsRecvRate,
+		RTT:        st.Instantaneous.MsRTT,
+		Loss:       st.Instantaneous.PktRecvLossRate,
+		BufferMs:   st.Instantaneous.MsRecvBuf,
+		LatencyMs:  st.Instantaneous.MsRecvTsbPdDelay,
+		PktRecv:    st.Accumulated.PktRecv,
+		PktRetrans: st.Accumulated.PktRecvRetrans,
+		PktLate:    st.Accumulated.PktRecvBelated,
+	}
+}
+
+// parseStreamSample extracts a sample from a statistics message. Client mode
+// receives these from the server over the telemetry channel, so every mode
+// sees the full statistics of the phone-to-server leg.
 func parseStreamSample(payload []byte) (streamSample, bool) {
 	var msg statsMessage
 	if err := json.Unmarshal(payload, &msg); err != nil || msg.Type != "reader" || msg.Stats == nil {
 		return streamSample{}, false
 	}
-	return streamSample{
-		At:      time.Now(),
-		Bitrate: msg.Stats.Instantaneous.MbpsRecvRate,
-		RTT:     msg.Stats.Instantaneous.MsRTT,
-		Loss:    msg.Stats.Instantaneous.PktRecvLossRate,
-	}, true
+	return sampleFromStats(time.Now(), msg.Stats), true
 }
 
 type (
