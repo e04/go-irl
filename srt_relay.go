@@ -188,6 +188,7 @@ func (r *srtRelay) handleStatsSubscribe(conn srt.Conn) {
 				Timestamp: time.Now(),
 				Type:      "reader",
 				Stats:     statistics,
+				Links:     srtlaLinks(),
 			}
 			var err error
 			payload, err = json.Marshal(message)

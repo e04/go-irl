@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -304,5 +306,26 @@ func TestSRTLASnapshot(t *testing.T) {
 		if time.Since(c.LastRcvd) > time.Minute {
 			t.Fatalf("conn %s LastRcvd = %v", c.Addr, c.LastRcvd)
 		}
+	}
+
+	links := srtlaLinks()
+	if len(links) != 2 || links[0].ID == 0 || links[0].ID == links[1].ID {
+		t.Fatalf("links = %+v, want 2 links with distinct IDs", links)
+	}
+	for i, c := range snap[0].Conns {
+		if links[i].ID != c.ID || links[i].RxBytes != c.RxBytes {
+			t.Fatalf("links[%d] = %+v, want the counters of %+v", i, links[i], c)
+		}
+	}
+}
+
+func TestSRTLALinksWithoutSRTLA(t *testing.T) {
+	setupSRTLA(t)
+	data, err := json.Marshal(statsMessage{Type: "reader", Links: srtlaLinks()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "links") {
+		t.Fatalf("message without SRTLA = %s, want no links field", data)
 	}
 }

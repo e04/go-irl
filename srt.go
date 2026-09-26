@@ -104,6 +104,7 @@ type statsMessage struct {
 	Timestamp time.Time       `json:"timestamp"`
 	Type      string          `json:"type"` // "writer" or "reader"
 	Stats     *srt.Statistics `json:"stats"`
+	Links     []linkStats     `json:"links,omitempty"` // SRTLA links feeding the reader
 }
 
 type stats struct {
@@ -152,6 +153,7 @@ func (s *stats) reportIfDue() {
 				Timestamp: now,
 				Type:      "reader",
 				Stats:     stats,
+				Links:     srtlaLinks(),
 			}
 			if jsonData, err := json.Marshal(readerMsg); err == nil {
 				select {

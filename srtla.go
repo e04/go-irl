@@ -78,6 +78,7 @@ func udpAddrEqual(a, b *net.UDPAddr) bool {
 }
 
 type Conn struct {
+	id       uint64 // opaque, unique for the process lifetime
 	addr     *net.UDPAddr
 	lastRcvd atomic.Int64            // UnixNano
 	rxBytes  atomic.Uint64           // bytes received on this link, for display
@@ -100,6 +101,8 @@ var (
 
 	srtlaSock *net.UDPConn
 	srtAddr   *net.UDPAddr // resolved downstream SRT server address
+
+	lastConnID atomic.Uint64
 )
 
 func be16(b []byte) uint16 { return binary.BigEndian.Uint16(b) }
@@ -278,7 +281,7 @@ func registerConn(addr *net.UDPAddr, pkt []byte) {
 
 	g.mu.Lock()
 	if existingConn == nil {
-		conn := &Conn{addr: addr}
+		conn := &Conn{id: lastConnID.Add(1), addr: addr}
 		conn.lastRcvd.Store(time.Now().UnixNano())
 		g.conns = append(g.conns, conn)
 	}
@@ -617,6 +620,7 @@ func startSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) erro
 }
 
 type srtlaConnInfo struct {
+	ID       uint64
 	Addr     string
 	LastRcvd time.Time
 	RxBytes  uint64 // total bytes received on the link
@@ -640,6 +644,7 @@ func srtlaSnapshot() []srtlaGroupInfo {
 		info := srtlaGroupInfo{CreatedAt: g.createdAt}
 		for _, c := range g.conns {
 			info.Conns = append(info.Conns, srtlaConnInfo{
+				ID:       c.id,
 				Addr:     c.addr.String(),
 				LastRcvd: time.Unix(0, c.lastRcvd.Load()),
 				RxBytes:  c.rxBytes.Load(),
@@ -649,6 +654,26 @@ func srtlaSnapshot() []srtlaGroupInfo {
 		infos = append(infos, info)
 	}
 	return infos
+}
+
+// linkStats is an SRTLA link's counters as sent to the Browser Source. Links
+// are identified by an opaque ID rather than their address, which the Browser
+// Source has no use for and which must not end up on stream.
+type linkStats struct {
+	ID      uint64 `json:"id"`
+	RxBytes uint64 `json:"rxBytes"` // total bytes received on the link
+}
+
+// srtlaLinks returns the counters of every registered SRTLA link, or nil when
+// SRTLA is not running in this process.
+func srtlaLinks() []linkStats {
+	var links []linkStats
+	for _, g := range srtlaSnapshot() {
+		for _, c := range g.Conns {
+			links = append(links, linkStats{ID: c.ID, RxBytes: c.RxBytes})
+		}
+	}
+	return links
 }
 
 // removeGroup deletes the group from global slice and closes its SRT socket.
