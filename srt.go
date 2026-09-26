@@ -313,13 +313,25 @@ func (o *udpOutput) snapshot() udpOutputSnapshot {
 	return o.snap
 }
 
+// srtPeerIdleTimeout is how long an SRT connection survives without hearing
+// from the peer. gosrt's default (2s) drops the stream on brief outages that
+// mobile senders (libsrt default: 5s) ride out, forcing a full reconnect.
+const srtPeerIdleTimeout = 5 * time.Second
+
+// newSRTConfig returns gosrt's default config with go-irl's overrides.
+func newSRTConfig() srt.Config {
+	config := srt.DefaultConfig()
+	config.PeerIdleTimeout = srtPeerIdleTimeout
+	return config
+}
+
 func openSrtStream(addr string) (io.ReadCloser, error) {
 	u, err := url.Parse(addr)
 	if err != nil {
 		return nil, err
 	}
 
-	config := srt.DefaultConfig()
+	config := newSRTConfig()
 	if err := config.UnmarshalQuery(u.RawQuery); err != nil {
 		return nil, err
 	}

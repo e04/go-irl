@@ -205,7 +205,7 @@ func (r *srtRelay) handleStatsSubscribe(conn srt.Conn) {
 }
 
 func (r *srtRelay) newServer(addr string) (*srt.Server, error) {
-	config := srt.DefaultConfig()
+	config := newSRTConfig()
 	server := &srt.Server{
 		Addr:            addr,
 		Config:          &config,
