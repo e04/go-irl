@@ -9,9 +9,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../src/App";
 import {
   type ConnectionQuality,
-  LOSS_RATE_HISTORY_SIZE,
+  RETRANS_RATE_HISTORY_SIZE,
   nextConnectionQuality,
 } from "../src/connectionQuality";
+import { retransRate } from "../src/stats";
 import { FakeWebSocket } from "../src/test/helpers";
 import { WebSocketMessageSchema } from "../src/types";
 
@@ -29,13 +30,13 @@ const captures: Capture[] = dir
   : [];
 
 // The distinct connection qualities the Browser Source passes through.
-function qualityTransitions(lossRates: number[]): ConnectionQuality[] {
+function qualityTransitions(rates: number[]): ConnectionQuality[] {
   const history: number[] = [];
   let quality: ConnectionQuality = "unknown";
   const seen: ConnectionQuality[] = [];
-  for (const rate of lossRates) {
+  for (const rate of rates) {
     history.push(rate);
-    if (history.length > LOSS_RATE_HISTORY_SIZE) history.shift();
+    if (history.length > RETRANS_RATE_HISTORY_SIZE) history.shift();
     quality = nextConnectionQuality(quality, history);
     if (quality !== "unknown" && seen[seen.length - 1] !== quality) {
       seen.push(quality);
@@ -55,6 +56,9 @@ describe.skipIf(!dir)("statistics captured from go-irl", () => {
       p.success && p.data.type === "reader" ? [p.data] : []
     );
     const expected = ([] as ConnectionQuality[]).concat(capture.expect.quality);
+    const rates = readers.map((m, i) =>
+      retransRate(m.stats, i > 0 ? readers[i - 1].stats : null)
+    );
 
     beforeEach(() => {
       vi.useFakeTimers();
@@ -71,8 +75,9 @@ describe.skipIf(!dir)("statistics captured from go-irl", () => {
     });
 
     it("drives connection quality as expected", () => {
-      const rates = readers.map((m) => m.stats.Instantaneous.PktRecvLossRate);
-      expect(qualityTransitions(rates)).toEqual(expected);
+      expect(
+        qualityTransitions(rates.filter((rate) => rate !== null))
+      ).toEqual(expected);
     });
 
     it("switches scenes and shows the latest stats", () => {
@@ -94,7 +99,9 @@ describe.skipIf(!dir)("statistics captured from go-irl", () => {
       const last = readers[readers.length - 1].stats.Instantaneous;
       expect(container.textContent).toContain(`${last.MbpsRecvRate.toFixed(1)}Mbps`);
       expect(container.textContent).toContain(`${last.MsRTT.toFixed(0)}ms`);
-      expect(container.textContent).toContain(`${last.PktRecvLossRate.toFixed(1)}%`);
+      expect(container.textContent).toContain(
+        `${rates[rates.length - 1]?.toFixed(1) ?? "-"}%`
+      );
     });
   });
 });

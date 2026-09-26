@@ -1,10 +1,7 @@
+import type { StatsSample } from "./stats";
+
 interface SimpleTextProps {
-  data: Array<{
-    timepointUnixMs: number;
-    bitrate: number;
-    rtt: number;
-    loss: number;
-  }>;
+  data: StatsSample[];
   isDisconnected: boolean;
 }
 
@@ -28,9 +25,9 @@ export function SimpleText({ data, isDisconnected }: SimpleTextProps) {
         style={{
           backgroundColor: isDisconnected
             ? "#CFD8DC"
-            : (lastItem?.loss ?? 0) > 0.2
+            : (lastItem?.retransRate ?? 0) > 20
             ? "#E57373"
-            : (lastItem?.loss ?? 0) > 0.05
+            : (lastItem?.retransRate ?? 0) > 5
             ? "#FFC107"
             : "#8BC34A",
           borderRadius: 12,
@@ -83,7 +80,7 @@ export function SimpleText({ data, isDisconnected }: SimpleTextProps) {
               color: "#FFB74D",
             }}
           >
-            {(lastItem.loss * 100).toFixed(1)}%
+            {lastItem.retransRate?.toFixed(1) ?? "-"}%
           </div>
         </div>
       )}

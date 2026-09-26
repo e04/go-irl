@@ -1,7 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { FakeWebSocket, makeStatsMessage } from "./test/helpers";
+import { FakeWebSocket, StatsStream } from "./test/helpers";
 
 vi.mock("./Graph", () => ({
   Graph: () => <div data-testid="graph" />,
@@ -15,11 +15,13 @@ function renderApp(query: string) {
   return { setCurrentScene, ...view };
 }
 
-function sendStats(lossRate: number, count = 1) {
+let stream: StatsStream;
+
+function sendStats(retransRate: number, count = 1) {
   for (let i = 0; i < count; i++) {
     act(() => {
       FakeWebSocket.latest().receive(
-        JSON.stringify(makeStatsMessage({ lossRate, bitrate: 5, rtt: 40 }))
+        JSON.stringify(stream.next({ retransRate, bitrate: 5, rtt: 40 }))
       );
       vi.advanceTimersByTime(1000);
     });
@@ -32,6 +34,7 @@ describe("App", () => {
     FakeWebSocket.reset();
     vi.stubGlobal("WebSocket", FakeWebSocket);
     vi.spyOn(console, "log").mockImplementation(() => {});
+    stream = new StatsStream();
   });
 
   it("connects to the WebSocket port from the query string", () => {
@@ -49,7 +52,8 @@ describe("App", () => {
       "?onlineSceneName=Live&offlineSceneName=BRB"
     );
 
-    sendStats(0, 3);
+    // The first message after connecting only sets the baseline.
+    sendStats(0, 4);
     expect(setCurrentScene).toHaveBeenLastCalledWith("Live");
 
     sendStats(50, 3);
@@ -61,7 +65,7 @@ describe("App", () => {
     expect(setCurrentScene).toHaveBeenLastCalledWith("BRB");
 
     // Reconnecting with a still-lossy link must not go back online.
-    sendStats(50, 3);
+    sendStats(50, 4);
     expect(setCurrentScene).not.toHaveBeenLastCalledWith("Live");
 
     sendStats(0, 3);
@@ -71,10 +75,12 @@ describe("App", () => {
   it("shows the latest stats in the simple view", () => {
     const { container } = renderApp("?type=simple");
 
-    sendStats(12);
-
+    sendStats(0);
     expect(container.textContent).toContain("5.0Mbps");
     expect(container.textContent).toContain("40ms");
+    expect(container.textContent).toContain("-%");
+
+    sendStats(12);
     expect(container.textContent).toContain("12.0%");
   });
 

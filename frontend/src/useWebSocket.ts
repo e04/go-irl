@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { WebSocketMessageSchema } from "./types";
-import { z } from "zod";
+import { type StatsMessage, type StatsSample, toSample } from "./stats";
 import {
   type ConnectionQuality,
-  LOSS_RATE_HISTORY_SIZE,
+  RETRANS_RATE_HISTORY_SIZE,
   nextConnectionQuality,
 } from "./connectionQuality";
 
 // Stats arrive about once per second; keep a bit more than the graph window.
-const MAX_MESSAGES = 120;
+const MAX_SAMPLES = 120;
 const CONNECTION_WAIT_TIME = 5000;
 const RECONNECT_DELAY = 1000;
 // Re-render periodically so disconnection is detected even without messages.
@@ -27,15 +27,15 @@ export function useWebSocket({
   onPoorConnection?: () => void;
   onGoodConnection?: () => void;
 }) {
-  const [messages, setMessages] = useState<
-    z.infer<typeof WebSocketMessageSchema>[]
-  >([]);
+  const [samples, setSamples] = useState<StatsSample[]>([]);
   const [, setTick] = useState(0);
   const socket = useRef<WebSocket | null>(null);
   const lastReceivedTime = useRef<number>(0);
   const previousConnectionState = useRef<boolean | null>(null);
+  // Rates are derived from the accumulated counters of consecutive messages.
+  const previousMessage = useRef<StatsMessage | null>(null);
 
-  const lossRateHistory = useRef<number[]>([]);
+  const retransRateHistory = useRef<number[]>([]);
   // "unknown" until enough samples arrive after (re)connecting. Scene
   // switching to online only happens via a transition to "good", so a
   // reconnect with a still-lossy link does not flip back to the online scene.
@@ -50,15 +50,15 @@ export function useWebSocket({
     socket.current.addEventListener("close", handleClose);
   };
 
-  const updateConnectionQuality = (lossRate: number) => {
-    lossRateHistory.current.push(lossRate);
-    if (lossRateHistory.current.length > LOSS_RATE_HISTORY_SIZE) {
-      lossRateHistory.current.shift();
+  const updateConnectionQuality = (retransRate: number) => {
+    retransRateHistory.current.push(retransRate);
+    if (retransRateHistory.current.length > RETRANS_RATE_HISTORY_SIZE) {
+      retransRateHistory.current.shift();
     }
 
     const next = nextConnectionQuality(
       connectionQualityRef.current,
-      lossRateHistory.current
+      retransRateHistory.current
     );
     if (next === connectionQualityRef.current) {
       return;
@@ -89,16 +89,18 @@ export function useWebSocket({
       return;
     }
 
-    const lossRate = parsed.data.stats?.Instantaneous?.PktRecvLossRate;
-    if (typeof lossRate === "number") {
-      updateConnectionQuality(lossRate);
+    const now = Date.now();
+    const sample = toSample(parsed.data, previousMessage.current, now);
+    previousMessage.current = parsed.data;
+    if (sample.retransRate !== null) {
+      updateConnectionQuality(sample.retransRate);
     }
 
-    lastReceivedTime.current = Date.now();
+    lastReceivedTime.current = now;
 
-    setMessages((prev) => {
-      const next = [...prev, parsed.data];
-      if (next.length > MAX_MESSAGES) next.shift();
+    setSamples((prev) => {
+      const next = [...prev, sample];
+      if (next.length > MAX_SAMPLES) next.shift();
       return next;
     });
   };
@@ -138,7 +140,8 @@ export function useWebSocket({
         currentDisconnectedState === true
       ) {
         // Stale samples must not decide the scene after reconnecting.
-        lossRateHistory.current = [];
+        retransRateHistory.current = [];
+        previousMessage.current = null;
         connectionQualityRef.current = "unknown";
         onDisconnected?.();
       } else if (
@@ -158,5 +161,5 @@ export function useWebSocket({
     onGoodConnection,
   ]);
 
-  return { messages, isDisconnected };
+  return { samples, isDisconnected };
 }

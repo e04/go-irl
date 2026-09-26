@@ -1,4 +1,4 @@
-import { expect, makeStatsMessage, scenes, test } from "./fixtures";
+import { expect, makeStatsMessage, scenes, StatsStream, test } from "./fixtures";
 
 const GREEN = "rgb(139, 195, 74)";
 const YELLOW = "rgb(255, 193, 7)";
@@ -23,17 +23,23 @@ test.describe("simple", () => {
     const indicator = page.locator("#root > div > div").first();
     await expect(indicator).toHaveCSS("background-color", GREY);
 
-    server.send(makeStatsMessage({ bitrate: 5.24, rtt: 42.4, lossRate: 0 }));
+    // The first message only sets the baseline for the retransmission rate.
+    const stats = new StatsStream();
+    server.send(stats.next({ bitrate: 5.24, rtt: 42.4 }));
     await expect(page.getByText("5.2Mbps")).toBeVisible();
     await expect(page.getByText("42ms")).toBeVisible();
+    await expect(page.getByText("-%")).toBeVisible();
+    await expect(indicator).toHaveCSS("background-color", GREEN);
+
+    server.send(stats.next({ retransRate: 0 }));
     await expect(page.getByText("0.0%")).toBeVisible();
     await expect(indicator).toHaveCSS("background-color", GREEN);
 
-    server.send(makeStatsMessage({ lossRate: 10 }));
+    server.send(stats.next({ retransRate: 10 }));
     await expect(page.getByText("10.0%")).toBeVisible();
     await expect(indicator).toHaveCSS("background-color", YELLOW);
 
-    server.send(makeStatsMessage({ lossRate: 30 }));
+    server.send(stats.next({ retransRate: 30 }));
     await expect(page.getByText("30.0%")).toBeVisible();
     await expect(indicator).toHaveCSS("background-color", RED);
 
@@ -73,28 +79,29 @@ test.describe("simple", () => {
 });
 
 test.describe("scene switching", () => {
-  test("switches to online on a healthy link and offline on sustained loss", async ({
+  test("switches to online on a healthy link and offline on sustained retransmission", async ({
     page,
     server,
   }) => {
     await page.goto("/");
     await server.connected();
 
-    for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage({ lossRate: 0 }));
+    const stats = new StatsStream();
+    for (let i = 0; i < 4; i++) {
+      server.send(stats.next({ retransRate: 0 }));
     }
     await expect.poll(() => scenes(page)).toEqual(["ONLINE"]);
 
     // One lossy sample is not enough to leave the online scene.
-    server.send(makeStatsMessage({ lossRate: 50 }));
-    server.send(makeStatsMessage({ lossRate: 0 }));
+    server.send(stats.next({ retransRate: 50 }));
+    server.send(stats.next({ retransRate: 0 }));
     for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage({ lossRate: 25 }));
+      server.send(stats.next({ retransRate: 25 }));
     }
     await expect.poll(() => scenes(page)).toEqual(["ONLINE", "OFFLINE"]);
 
     for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage({ lossRate: 1 }));
+      server.send(stats.next({ retransRate: 1 }));
     }
     await expect.poll(() => scenes(page)).toEqual(["ONLINE", "OFFLINE", "ONLINE"]);
   });
@@ -103,8 +110,9 @@ test.describe("scene switching", () => {
     await page.goto("/?onlineSceneName=Live&offlineSceneName=BRB");
     await server.connected();
 
-    for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage());
+    const stats = new StatsStream();
+    for (let i = 0; i < 4; i++) {
+      server.send(stats.next());
     }
     await expect.poll(() => scenes(page)).toEqual(["Live"]);
 
@@ -119,21 +127,24 @@ test.describe("scene switching", () => {
     await page.goto("/");
     await server.connected();
 
-    for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage());
+    const stats = new StatsStream();
+    for (let i = 0; i < 4; i++) {
+      server.send(stats.next());
     }
     await expect.poll(() => scenes(page)).toEqual(["ONLINE"]);
 
     await page.clock.runFor(6000);
     await expect.poll(() => scenes(page)).toEqual(["ONLINE", "OFFLINE"]);
 
-    // A single sample after the gap is not enough to go back online.
-    server.send(makeStatsMessage());
-    await expect(page.getByText("5.0Mbps")).toBeVisible();
+    // The first message after the gap only sets a new baseline, and one
+    // sample after that is not enough to go back online.
+    server.send(stats.next());
+    server.send(stats.next());
+    await expect(page.getByText("0.0%")).toBeVisible();
     expect(await scenes(page)).toEqual(["ONLINE", "OFFLINE"]);
 
-    server.send(makeStatsMessage());
-    server.send(makeStatsMessage());
+    server.send(stats.next());
+    server.send(stats.next());
     await expect.poll(() => scenes(page)).toEqual(["ONLINE", "OFFLINE", "ONLINE"]);
   });
 });
@@ -174,8 +185,16 @@ test.describe("other display types", () => {
     const canvas = page.locator("canvas");
     await expect(canvas).toBeVisible();
 
-    for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage({ bitrate: 7.5, rtt: 80, lossRate: 2 }));
+    const stats = new StatsStream();
+    for (let i = 0; i < 4; i++) {
+      server.send(
+        stats.next({
+          bitrate: 7.5,
+          rtt: 80,
+          retransRate: 2,
+          linkBytes: { 1: 600_000, 2: 400_000 },
+        })
+      );
     }
     await expect(page.getByText("7.5Mbps")).toBeVisible();
     await expect(page.getByText("80ms")).toBeVisible();
@@ -189,8 +208,9 @@ test.describe("other display types", () => {
     await page.goto("/?type=none");
     await server.connected();
 
-    for (let i = 0; i < 3; i++) {
-      server.send(makeStatsMessage());
+    const stats = new StatsStream();
+    for (let i = 0; i < 4; i++) {
+      server.send(stats.next());
     }
     await expect.poll(() => scenes(page)).toEqual(["ONLINE"]);
     await expect(page.locator("#root")).toBeEmpty();

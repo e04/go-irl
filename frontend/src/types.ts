@@ -103,8 +103,16 @@ export const StatisticsSchema = z.object({
   }),
 });
 
+// Counters of an SRTLA link feeding the reader. Absent when the stream does
+// not come through go-irl's SRTLA receiver.
+export const LinkStatsSchema = z.object({
+  id: z.number(),
+  rxBytes: z.number(),
+});
+
 export const WebSocketMessageSchema = z.object({
   timestamp: z.string(),
   type: z.enum(["reader", "writer"]),
   stats: StatisticsSchema,
+  links: z.array(LinkStatsSchema).optional(),
 });

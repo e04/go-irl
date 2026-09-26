@@ -216,7 +216,9 @@ func TestStandaloneSenderReconnect(t *testing.T) {
 	s.irl.waitLog(t, logGroupRegistered, 2, 5*time.Second)
 	pub2 := startPublisher(t, dialPublisher(t, sender2.listenPort, passphrase, 30*time.Second), 2, 4)
 	s.irl.waitLog(t, `SRT reader connected`, 2, 10*time.Second)
-	resumed := s.ws.waitReaders(t, mark, 2, 15*time.Second, "statistics after reconnect", func(m statsMessage) bool {
+	// The Browser Source derives rates from consecutive messages of the same
+	// connection, so it needs a baseline plus three samples to report "good".
+	resumed := s.ws.waitReaders(t, mark, 4, 15*time.Second, "statistics after reconnect", func(m statsMessage) bool {
 		return m.Stats.Accumulated.PktRecv > 0
 	})
 	pub2.pause()

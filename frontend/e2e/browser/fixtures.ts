@@ -4,9 +4,9 @@ import {
   type Page,
   type WebSocketRoute,
 } from "@playwright/test";
-import { makeStatsMessage } from "../../src/test/helpers";
+import { makeStatsMessage, StatsStream } from "../../src/test/helpers";
 
-export { expect, makeStatsMessage };
+export { expect, makeStatsMessage, StatsStream };
 
 // Stands in for go-irl's /ws endpoint. Every connection the page opens is
 // recorded so tests can push stats or close it like the server would.

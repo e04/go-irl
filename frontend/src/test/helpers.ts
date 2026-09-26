@@ -56,22 +56,62 @@ function zeroFill(schema: z.ZodTypeAny): unknown {
   return 0;
 }
 
-export function makeStatsMessage({
-  lossRate = 0,
-  bitrate = 5,
-  rtt = 40,
-  type = "reader",
-  timestamp = new Date(),
-}: {
-  lossRate?: number;
+type StatsMessageOptions = {
   bitrate?: number;
   rtt?: number;
   type?: "reader" | "writer";
   timestamp?: Date;
-} = {}): z.infer<typeof WebSocketMessageSchema> {
+};
+
+export function makeStatsMessage({
+  bitrate = 5,
+  rtt = 40,
+  type = "reader",
+  timestamp = new Date(),
+}: StatsMessageOptions = {}): z.infer<typeof WebSocketMessageSchema> {
   const stats = zeroFill(StatisticsSchema) as z.infer<typeof StatisticsSchema>;
-  stats.Instantaneous.PktRecvLossRate = lossRate;
   stats.Instantaneous.MbpsRecvRate = bitrate;
   stats.Instantaneous.MsRTT = rtt;
   return { timestamp: timestamp.toISOString(), type, stats };
+}
+
+const PACKETS_PER_SAMPLE = 1000;
+
+// Messages from one SRT connection. The retransmission rate is derived from
+// the accumulated counters of consecutive messages, so the first message of a
+// stream (and the first after a disconnection) only sets the baseline.
+export class StatsStream {
+  private msTimeStamp = 0;
+  private pktRecv = 0;
+  private pktRecvRetrans = 0;
+  private linkRxBytes = new Map<number, number>();
+
+  // linkBytes maps SRTLA link IDs to the bytes they received since the
+  // previous message; links left out are no longer registered.
+  next({
+    retransRate = 0,
+    linkBytes,
+    ...options
+  }: StatsMessageOptions & {
+    retransRate?: number;
+    linkBytes?: Record<number, number>;
+  } = {}) {
+    this.msTimeStamp += 1000;
+    this.pktRecv += PACKETS_PER_SAMPLE;
+    this.pktRecvRetrans += Math.round((PACKETS_PER_SAMPLE * retransRate) / 100);
+
+    const message = makeStatsMessage(options);
+    message.stats.MsTimeStamp = this.msTimeStamp;
+    message.stats.Accumulated.PktRecv = this.pktRecv;
+    message.stats.Accumulated.PktRecvRetrans = this.pktRecvRetrans;
+    if (linkBytes != null) {
+      message.links = Object.entries(linkBytes).map(([key, bytes]) => {
+        const id = Number(key);
+        const rxBytes = (this.linkRxBytes.get(id) ?? 0) + bytes;
+        this.linkRxBytes.set(id, rxBytes);
+        return { id, rxBytes };
+      });
+    }
+    return message;
+  }
 }

@@ -12,7 +12,7 @@ function App() {
   const onlineSceneName = urlParams.get("onlineSceneName") || "ONLINE";
   const offlineSceneName = urlParams.get("offlineSceneName") || "OFFLINE";
 
-  const { messages, isDisconnected } = useWebSocket({
+  const { samples: data, isDisconnected } = useWebSocket({
     url: ENDPOINT,
     onConnected: () => {
       // The online scene is restored by onGoodConnection once enough stats
@@ -31,15 +31,6 @@ function App() {
       console.log("poor connection");
       window.obsstudio?.setCurrentScene(offlineSceneName);
     },
-  });
-
-  const data = messages.map((item) => {
-    return {
-      timepointUnixMs: new Date(item.timestamp).getTime(),
-      bitrate: item.stats.Instantaneous.MbpsRecvRate,
-      rtt: item.stats.Instantaneous.MsRTT,
-      loss: item.stats.Instantaneous.PktRecvLossRate / 100,
-    };
   });
 
   const renderComponent = () => {
