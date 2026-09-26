@@ -35,6 +35,7 @@ frontend/node_modules
 frontend/dist
 
 obs-srt-bridge
+/go-irl
 
 .DS_Store
 
