@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +11,8 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+
+	"golang.org/x/term"
 )
 
 var (
@@ -26,6 +29,8 @@ var (
 	insecure   = flag.Bool("insecure", false, "Allow server mode to run without a passphrase (anyone can publish or watch the stream)")
 
 	verbose = flag.Bool("verbose", false, "Enable verbose logging in srtla (server/standalone)")
+
+	cliMode = flag.Bool("cli", false, "Use plain log output instead of the interactive terminal UI")
 )
 
 var logo = `
@@ -72,148 +77,143 @@ func makeSRTURL(host string, port int, mode, passphrase, streamID string) string
 
 func main() {
 	flag.Parse()
+	cfg := configFromFlags()
 
+	if *cliMode || !isInteractiveTerminal() {
+		runCLI(cfg)
+		return
+	}
+	if err := runTUI(cfg, flag.NFlag() == 0); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func isInteractiveTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func runCLI(cfg config) {
 	fmt.Println(logo)
 
-	switch *mode {
-	case "server":
-		runServerMode()
-	case "client":
-		runClientMode()
-	case "standalone", "":
-		runStandaloneMode()
-	default:
-		log.Fatalf("ERROR: unknown -mode '%s' (expected server|client|standalone)", *mode)
-	}
-}
-
-// validateServerPassphrase rejects an empty passphrase in server mode unless
-// explicitly allowed. The relay is publicly reachable and the downstream stream
-// ID is fixed, so without encryption anyone could watch or hijack the stream.
-func validateServerPassphrase(passphrase string, allowInsecure bool) error {
-	if passphrase == "" && !allowInsecure {
-		return fmt.Errorf("server mode requires -passphrase (use -insecure to run without encryption)")
-	}
-	return nil
-}
-
-func runServerMode() {
-	if *srtPort <= 0 || *srtPort > 65535 {
-		log.Fatalf("ERROR: server mode requires -srt-port (1-65535)")
-	}
-	if *srtlaPort <= 0 || *srtlaPort > 65535 {
-		log.Fatalf("ERROR: server mode requires -srtla-port (1-65535)")
-	}
-	if *srtPort == *srtlaPort {
-		log.Fatalf("ERROR: -srt-port and -srtla-port must be different")
-	}
-	if *passphrase != "" && len(*passphrase) < 10 {
-		log.Fatalf("ERROR: Passphrase must be at least 10 characters long")
-	}
-	if err := validateServerPassphrase(*passphrase, *insecure); err != nil {
+	if err := cfg.validate(); err != nil {
 		log.Fatalf("ERROR: %v", err)
 	}
-	if *passphrase == "" {
-		log.Println("WARNING: -insecure set. Both SRT legs are unencrypted and anyone can publish or watch the stream.")
+	for _, w := range cfg.warnings() {
+		log.Printf("WARNING: %s", w)
 	}
 
-	relay := newSRTRelay(*passphrase)
-	relayAddr := net.JoinHostPort("0.0.0.0", strconv.Itoa(*srtPort))
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := runMode(ctx, cfg, runHooks{}); err != nil {
+		log.Fatalf("ERROR: %v", err)
+	}
+}
+
+// runHooks lets the TUI observe a running mode.
+type runHooks struct {
+	onStats func([]byte)    // statistics broadcast to the Browser Source (client/standalone)
+	onRelay func(*srtRelay) // called once the relay is listening (server)
+}
+
+// runMode starts the components for cfg's mode and blocks until ctx is done
+// or a component fails. cfg must already be validated.
+func runMode(ctx context.Context, cfg config, hooks runHooks) error {
+	switch cfg.normalizedMode() {
+	case "server":
+		return runServerMode(ctx, cfg, hooks)
+	case "client":
+		return runClientMode(ctx, cfg, hooks)
+	default:
+		return runStandaloneMode(ctx, cfg, hooks)
+	}
+}
+
+func runServerMode(ctx context.Context, cfg config, hooks runHooks) error {
+	relay := newSRTRelay(cfg.Passphrase)
+	relayAddr := net.JoinHostPort("0.0.0.0", strconv.Itoa(cfg.SRTPort))
 	relayServer, err := relay.newServer(relayAddr)
 	if err != nil {
-		log.Fatalf("ERROR: %v", err)
+		return err
+	}
+	defer relayServer.Shutdown()
+	if hooks.onRelay != nil {
+		hooks.onRelay(relay)
 	}
 
-	log.Printf("[server mode] SRTLA input UDP :%d  Downstream SRT UDP :%d", *srtlaPort, *srtPort)
+	log.Printf("[server mode] SRTLA input UDP :%d  Downstream SRT UDP :%d", cfg.SRTLAPort, cfg.SRTPort)
 
 	relayDone := make(chan error, 1)
 	go func() {
 		relayDone <- relayServer.Serve()
 	}()
-	go runSrtla(uint(*srtlaPort), "127.0.0.1", uint(*srtPort), *verbose)
-
-	waitForRelay(relayDone)
-	relayServer.Shutdown()
-}
-
-func runClientMode() {
-	if *srtPort <= 0 || *srtPort > 65535 {
-		log.Fatalf("ERROR: client mode requires -srt-port (1-65535)")
-	}
-	if *srtHost == "" {
-		log.Fatalf("ERROR: client mode requires -srt-host")
-	}
-	if *passphrase != "" && len(*passphrase) < 10 {
-		log.Fatalf("ERROR: Passphrase must be at least 10 characters long")
-	}
-	if *passphrase == "" {
-		log.Println("WARNING: No passphrase set. SRT stream will be unencrypted.")
+	if err := startSrtla(uint(cfg.SRTLAPort), "127.0.0.1", uint(cfg.SRTPort), cfg.Verbose); err != nil {
+		return err
 	}
 
-	fromAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStreamID)
-	telemetryAddr := makeSRTURL(*srtHost, *srtPort, "caller", *passphrase, downstreamStatsStreamID)
-
-	log.Printf("[client mode] Connecting to SRT server %s:%d", *srtHost, *srtPort)
-
-	go runBrowserSource(*bsPort)
-	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort, telemetryAddr)
-	waitForEither(srtDoneChan)
-}
-
-func runStandaloneMode() {
-	if *passphrase != "" && len(*passphrase) < 10 {
-		log.Fatalf("ERROR: Passphrase must be at least 10 characters long")
-	}
-	if *passphrase == "" {
-		log.Println("WARNING: No passphrase set. SRT stream will be unencrypted.")
-	}
-
-	internalSrtPort, err := getFreePort()
-	if err != nil {
-		log.Fatalf("ERROR: failed to allocate internal SRT port: %v", err)
-	}
-
-	fromAddr := makeSRTURL("127.0.0.1", internalSrtPort, "listener", *passphrase, "")
-
-	go runBrowserSource(*bsPort)
-	go runSrtla(uint(*srtlaPort), "127.0.0.1", uint(internalSrtPort), *verbose)
-	srtDoneChan := runSrtProxy(fromAddr, fmt.Sprintf("udp://127.0.0.1:%d", *udpPort), *wsPort, "")
-	waitForEither(srtDoneChan)
-}
-
-func waitForSignal() {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	<-signalChan
-	log.Println("Shutdown signal received, exiting.")
-}
-
-func waitForEither(srtDoneChan <-chan error) {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case err := <-srtDoneChan:
-		if err != nil {
-			log.Printf("SRT proxy exited with error: %v", err)
-		} else {
-			log.Println("SRT proxy exited gracefully.")
-		}
-	case <-signalChan:
-		log.Println("Shutdown signal received, exiting.")
-	}
-}
-
-func waitForRelay(relayDone <-chan error) {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case err := <-relayDone:
 		if err != nil {
-			log.Printf("SRT relay exited with error: %v", err)
-		} else {
-			log.Println("SRT relay exited gracefully.")
+			return fmt.Errorf("SRT relay exited: %w", err)
 		}
-	case <-signalChan:
+		log.Println("SRT relay exited gracefully.")
+	case <-ctx.Done():
 		log.Println("Shutdown signal received, exiting.")
 	}
+	return nil
+}
+
+func runClientMode(ctx context.Context, cfg config, hooks runHooks) error {
+	fromAddr := makeSRTURL(cfg.SRTHost, cfg.SRTPort, "caller", cfg.Passphrase, downstreamStreamID)
+	telemetryAddr := makeSRTURL(cfg.SRTHost, cfg.SRTPort, "caller", cfg.Passphrase, downstreamStatsStreamID)
+
+	log.Printf("[client mode] Connecting to SRT server %s:%d", cfg.SRTHost, cfg.SRTPort)
+
+	errCh := make(chan error, 1)
+	if err := startBrowserSource(cfg.BSPort, errCh); err != nil {
+		return err
+	}
+	srtDoneChan, err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, telemetryAddr, hooks.onStats)
+	if err != nil {
+		return err
+	}
+	return waitForEither(ctx, srtDoneChan, errCh)
+}
+
+func runStandaloneMode(ctx context.Context, cfg config, hooks runHooks) error {
+	internalSrtPort, err := getFreePort()
+	if err != nil {
+		return fmt.Errorf("failed to allocate internal SRT port: %w", err)
+	}
+
+	fromAddr := makeSRTURL("127.0.0.1", internalSrtPort, "listener", cfg.Passphrase, "")
+
+	errCh := make(chan error, 1)
+	if err := startBrowserSource(cfg.BSPort, errCh); err != nil {
+		return err
+	}
+	if err := startSrtla(uint(cfg.SRTLAPort), "127.0.0.1", uint(internalSrtPort), cfg.Verbose); err != nil {
+		return err
+	}
+	srtDoneChan, err := runSrtProxy(fromAddr, cfg.udpOutputURL(), cfg.WSPort, "", hooks.onStats)
+	if err != nil {
+		return err
+	}
+	return waitForEither(ctx, srtDoneChan, errCh)
+}
+
+func waitForEither(ctx context.Context, srtDoneChan <-chan error, errCh <-chan error) error {
+	select {
+	case err := <-srtDoneChan:
+		if err != nil {
+			return fmt.Errorf("SRT proxy exited: %w", err)
+		}
+		log.Println("SRT proxy exited gracefully.")
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		log.Println("Shutdown signal received, exiting.")
+	}
+	return nil
 }

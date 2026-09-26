@@ -284,3 +284,25 @@ func TestSRTLAConcurrentAddressLookup(t *testing.T) {
 	}
 	<-done
 }
+
+func TestSRTLASnapshot(t *testing.T) {
+	setupSRTLA(t)
+	a, b := udpTestSocket(t), udpTestSocket(t)
+	reg2 := moblinRegister(t, a)
+	handleSRTLAIncoming(reg2, b.LocalAddr().(*net.UDPAddr))
+	readUDP(t, b)
+
+	snap := srtlaSnapshot()
+	if len(snap) != 1 || len(snap[0].Conns) != 2 {
+		t.Fatalf("snapshot = %+v, want 1 group with 2 conns", snap)
+	}
+	want := map[string]bool{a.LocalAddr().String(): true, b.LocalAddr().String(): true}
+	for _, c := range snap[0].Conns {
+		if !want[c.Addr] {
+			t.Fatalf("unexpected conn %s", c.Addr)
+		}
+		if time.Since(c.LastRcvd) > time.Minute {
+			t.Fatalf("conn %s LastRcvd = %v", c.Addr, c.LastRcvd)
+		}
+	}
+}

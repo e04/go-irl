@@ -4,13 +4,16 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 )
 
 //go:embed frontend/dist/index.html
 var browserSourceHtml []byte
 
-func runBrowserSource(port int) {
+// startBrowserSource binds the Browser Source port and serves it in the
+// background. Errors after startup are sent to errCh.
+func startBrowserSource(port int, errCh chan<- error) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/app" {
@@ -20,10 +23,17 @@ func runBrowserSource(port int) {
 		}
 	})
 
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return fmt.Errorf("failed to start Browser Source server: %w", err)
+	}
+
 	log.Printf("Browser Source address: http://127.0.0.1:%d/app\n", port)
 
-	err := http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), mux)
-	if err != nil {
-		log.Fatalf("Failed to start Browser Source server: %v", err)
-	}
+	go func() {
+		if err := http.Serve(ln, mux); err != nil {
+			errCh <- fmt.Errorf("Browser Source server: %w", err)
+		}
+	}()
+	return nil
 }

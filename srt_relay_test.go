@@ -167,6 +167,13 @@ func TestSRTRelaySendsUpstreamStatisticsToCallingClient(t *testing.T) {
 		if message.Stats.Accumulated.PktRecv == 0 {
 			t.Fatal("upstream statistics did not include received packets")
 		}
+		snap := relay.snapshot()
+		if snap.PublisherAddr == "" || snap.Stats == nil {
+			t.Fatalf("snapshot has no publisher: %+v", snap)
+		}
+		if snap.StatsClients != 1 || snap.Subscribers != 0 {
+			t.Fatalf("snapshot clients = %d stream / %d stats, want 0 / 1", snap.Subscribers, snap.StatsClients)
+		}
 	case err := <-errResult:
 		t.Fatalf("read statistics: %v", err)
 	case <-time.After(5 * time.Second):

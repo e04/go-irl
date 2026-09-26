@@ -50,14 +50,18 @@ type hub struct {
 	register   chan *websocket.Conn
 	unregister chan *websocket.Conn
 	mutex      sync.RWMutex
+
+	// onMessage, if set, observes every broadcast message.
+	onMessage func([]byte)
 }
 
-func newHub() *hub {
+func newHub(onMessage func([]byte)) *hub {
 	return &hub{
 		clients:    make(map[*websocket.Conn]bool),
 		broadcast:  make(chan []byte),
 		register:   make(chan *websocket.Conn),
 		unregister: make(chan *websocket.Conn),
+		onMessage:  onMessage,
 	}
 }
 
@@ -80,6 +84,9 @@ func (h *hub) run() {
 			log.Printf("WebSocket client disconnected. Total clients: %d", len(h.clients))
 
 		case message := <-h.broadcast:
+			if h.onMessage != nil {
+				h.onMessage(message)
+			}
 			h.mutex.RLock()
 			for client := range h.clients {
 				err := client.WriteMessage(websocket.TextMessage, message)
@@ -181,10 +188,19 @@ func handleWebSocket(hub *hub, w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func runSrtProxy(from string, to string, wsPort int, telemetryFrom string) <-chan error {
+// runSrtProxy forwards the SRT stream at from to the UDP address to. When
+// wsPort is set, statistics are broadcast over WebSocket and passed to
+// onStats. Startup errors are returned; later failures are sent on the
+// returned channel.
+func runSrtProxy(from string, to string, wsPort int, telemetryFrom string, onStats func([]byte)) (<-chan error, error) {
 	var hub *hub
 	if wsPort > 0 {
-		hub = newHub()
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", wsPort))
+		if err != nil {
+			return nil, fmt.Errorf("failed to start WebSocket server: %w", err)
+		}
+
+		hub = newHub(onStats)
 		go hub.run()
 
 		wsMux := http.NewServeMux()
@@ -192,9 +208,9 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string) <-cha
 			handleWebSocket(hub, w, r)
 		})
 
+		log.Printf("WebSocket server address: ws://127.0.0.1:%d/ws", wsPort)
 		go func() {
-			log.Printf("WebSocket server address: ws://127.0.0.1:%d/ws", wsPort)
-			if err := http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", wsPort), wsMux); err != nil {
+			if err := http.Serve(ln, wsMux); err != nil {
 				log.Printf("WebSocket server error: %v", err)
 			}
 		}()
@@ -208,8 +224,7 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string) <-cha
 
 	w, err := openUDPWriter(to)
 	if err != nil {
-		doneChan <- fmt.Errorf("to: %w", err)
-		return doneChan
+		return nil, fmt.Errorf("to: %w", err)
 	}
 
 	go func() {
@@ -256,7 +271,7 @@ func runSrtProxy(from string, to string, wsPort int, telemetryFrom string) <-cha
 		}
 	}()
 
-	return doneChan
+	return doneChan, nil
 }
 
 func openSrtStream(addr string) (io.ReadCloser, error) {

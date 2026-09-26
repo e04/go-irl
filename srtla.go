@@ -560,7 +560,10 @@ func resolveSRTAddr(host string, port uint16) (*net.UDPAddr, error) {
 	return &net.UDPAddr{IP: addrs[0], Port: int(port)}, nil
 }
 
-func runSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) {
+// startSrtla resolves the downstream SRT server and binds the SRTLA socket,
+// then serves SRTLA traffic in the background. Setup errors are returned so
+// callers can report them without exiting the process.
+func startSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) error {
 	if verbose {
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
@@ -568,7 +571,7 @@ func runSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) {
 	var err error
 	srtAddr, err = resolveSRTAddr(srtHost, uint16(srtPort))
 	if err != nil {
-		log.Fatalf("Could not resolve downstream SRT server: %v", err)
+		return fmt.Errorf("could not resolve downstream SRT server: %w", err)
 	}
 	log.Printf("Downstream SRT server %s", srtAddr)
 
@@ -576,7 +579,7 @@ func runSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) {
 	laddr := &net.UDPAddr{IP: net.IPv6unspecified, Port: int(srtlaPort)}
 	srtlaSock, err = net.ListenUDP("udp", laddr)
 	if err != nil {
-		log.Fatalf("Failed to listen on UDP port %d: %v", srtlaPort, err)
+		return fmt.Errorf("failed to listen on UDP port %d: %w", srtlaPort, err)
 	}
 	_ = srtlaSock.SetReadBuffer(RecvBufSize)
 	_ = srtlaSock.SetWriteBuffer(SendBufSize)
@@ -602,10 +605,46 @@ func runSrtla(srtlaPort uint, srtHost string, srtPort uint, verbose bool) {
 	}()
 
 	// Periodic cleanup ticker
-	ticker := time.NewTicker(CleanupPeriod)
-	for range ticker.C {
-		cleanup()
+	go func() {
+		ticker := time.NewTicker(CleanupPeriod)
+		for range ticker.C {
+			cleanup()
+		}
+	}()
+	return nil
+}
+
+type srtlaConnInfo struct {
+	Addr     string
+	LastRcvd time.Time
+}
+
+type srtlaGroupInfo struct {
+	CreatedAt time.Time
+	Conns     []srtlaConnInfo
+}
+
+// srtlaSnapshot returns the currently registered SRTLA groups and their
+// connections for display.
+func srtlaSnapshot() []srtlaGroupInfo {
+	groupsMu.RLock()
+	gs := append([]*Group(nil), groups...)
+	groupsMu.RUnlock()
+
+	infos := make([]srtlaGroupInfo, 0, len(gs))
+	for _, g := range gs {
+		g.mu.Lock()
+		info := srtlaGroupInfo{CreatedAt: g.createdAt}
+		for _, c := range g.conns {
+			info.Conns = append(info.Conns, srtlaConnInfo{
+				Addr:     c.addr.String(),
+				LastRcvd: time.Unix(0, c.lastRcvd.Load()),
+			})
+		}
+		g.mu.Unlock()
+		infos = append(infos, info)
 	}
+	return infos
 }
 
 // removeGroup deletes the group from global slice and closes its SRT socket.
